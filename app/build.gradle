@@ -15,10 +15,27 @@ android {
         versionName "1.0.0"
     }
 
+    // Release signing via environment variables (see build.sh / release/keys.sh).
+    // Uses the SHARED EvTrack keystore (alias evtrack-release) — same key as the
+    // main app (com.evtrack.frontdesk), so the two share a signature identity.
+    // Nothing secret is stored in-tree; the four vars are exported by keys.sh.
+    signingConfigs {
+        release {
+            def keystorePath = System.getenv('EVTRACK_KEYSTORE_FILE')
+            if (keystorePath) {
+                storeFile file(keystorePath)
+            }
+            storePassword System.getenv('EVTRACK_KEYSTORE_PASSWORD')
+            keyAlias System.getenv('EVTRACK_KEY_ALIAS')
+            keyPassword System.getenv('EVTRACK_KEY_PASSWORD')
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
         }
     }
 
