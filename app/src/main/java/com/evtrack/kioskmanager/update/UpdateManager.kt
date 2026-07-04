@@ -59,6 +59,35 @@ class UpdateManager(
     suspend fun checkForUpdate(variant: String): ReleaseMeta? = cdn.fetchLatest(variant)
 
     /**
+     * BOOTSTRAP first-install (issue #31). On a fresh OS image the managed app isn't
+     * installed yet, so there is no FrontDesk to send a pinned trigger. The Manager
+     * ships with the OS and pulls the [variant] ("latest" by default) from the CDN
+     * itself. Reuses the same download → verify → install flow.
+     */
+    suspend fun bootstrapLatest(variant: String = DEFAULT_BOOTSTRAP_VARIANT): UpdateResult {
+        val meta = cdn.fetchLatest(variant)
+            ?: return UpdateResult(false, "Bootstrap: CDN pointer unavailable for '$variant'")
+        Log.i(TAG, "Bootstrap install of ${meta.versionBuild} ($variant); managed app not installed")
+        return updateTo(meta)
+    }
+
+    /** True if the managed app is currently installed. */
+    fun isManagedInstalled(): Boolean = installedVersion() != null
+
+    /**
+     * Install an EXACT pinned build — the FrontDesk-triggered path (issue #30). The
+     * server pins {version, build}; we resolve the deterministic CDN artifact and run
+     * the same download → verify → snapshot → install → rollback-on-failure flow.
+     * If that exact build is already installed, [updateTo] still runs (PackageInstaller
+     * treats a reinstall of the same build as a benign no-op).
+     */
+    suspend fun updateToPinned(version: String, build: String): UpdateResult {
+        val meta = cdn.fetchPinned(version, build)
+        Log.i(TAG, "Pinned install requested: ${meta.versionBuild} (installed=${installedVersion()})")
+        return updateTo(meta)
+    }
+
+    /**
      * Download, verify, snapshot last-known-good, then install [meta].
      * On install failure, automatically attempts [rollback].
      */
@@ -149,5 +178,8 @@ class UpdateManager(
 
     companion object {
         private const val TAG = "UpdateManager"
+
+        /** CDN variant the Manager bootstraps on a fresh device. */
+        const val DEFAULT_BOOTSTRAP_VARIANT = "latest"
     }
 }

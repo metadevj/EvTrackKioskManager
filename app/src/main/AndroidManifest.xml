@@ -5,10 +5,27 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- Foreground service (dataSync) runs the download+install past the receiver's lifetime. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- Resume an interrupted install after reboot. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Show the ongoing FGS notification on Android 13+. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <!--
       NOTE: As Device Owner, silent install via PackageInstaller does NOT require
       REQUEST_INSTALL_PACKAGES / the "install unknown apps" user prompt.
     -->
+
+    <!--
+      Signature-level permission guarding the FrontDesk -> Manager install trigger.
+      Only apps signed with the SAME key (evtrack-release) — i.e. FrontDesk — are
+      granted it, so no other app can drive installs. FrontDesk <uses-permission> this.
+    -->
+    <permission
+        android:name="com.evtrack.kioskmanager.permission.INSTALL_REQUEST"
+        android:protectionLevel="signature" />
 
     <application
         android:allowBackup="true"
@@ -52,6 +69,39 @@
         <receiver
             android:name=".update.InstallResultReceiver"
             android:exported="false" />
+
+        <!--
+          FrontDesk -> Manager install trigger. Exported so FrontDesk can reach it,
+          but gated by our signature permission so ONLY same-signed apps can fire it.
+        -->
+        <receiver
+            android:name=".ipc.InstallRequestReceiver"
+            android:exported="true"
+            android:permission="com.evtrack.kioskmanager.permission.INSTALL_REQUEST">
+            <intent-filter>
+                <action android:name="com.evtrack.kioskmanager.action.INSTALL" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Carries out the download + silent install in the foreground. -->
+        <service
+            android:name=".ipc.InstallService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <!--
+          On boot: resume an interrupted install, and bootstrap the main app on a
+          fresh device (installs latest from the CDN when the managed app is absent,
+          since FrontDesk isn't there yet to trigger it).
+        -->
+        <receiver
+            android:name=".ipc.BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
 
     </application>
 

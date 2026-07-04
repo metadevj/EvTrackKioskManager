@@ -67,6 +67,31 @@ class CdnClient(private val base: String = DEFAULT_BASE) {
         }
     }
 
+    /**
+     * Resolve a PINNED build (exact version + build) to a downloadable [ReleaseMeta].
+     *
+     * The APK URL is deterministic ($base/<folder>/<version>.<build>/<apk>), so this
+     * never needs the variant pointer. We additionally *try* the per-version pointer
+     * JSON in the same folder for an optional sha256, but its absence is fine — the
+     * install still enforces the APK signature regardless.
+     */
+    suspend fun fetchPinned(version: String, build: String): ReleaseMeta = withContext(Dispatchers.IO) {
+        val folder = "$version.$build"
+        val downloadUrl = "$base/$MANAGED_FOLDER/$folder/$APK_FILENAME"
+        val sha256 = try {
+            val body = httpGet("$base/$MANAGED_FOLDER/$folder/$POINTER_JSON?r=${System.nanoTime()}")
+            body?.let {
+                JSONObject(it).optJSONArray("apps")
+                    ?.optJSONObject(0)
+                    ?.optString("sha256")
+                    ?.takeIf { s -> s.isNotEmpty() }
+            }
+        } catch (e: Exception) {
+            null
+        }
+        ReleaseMeta(version = version, build = build, sha256 = sha256, downloadUrl = downloadUrl)
+    }
+
     private fun httpGet(urlStr: String): String? {
         var conn: HttpURLConnection? = null
         return try {
