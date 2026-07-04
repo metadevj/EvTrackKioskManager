@@ -17,4 +17,10 @@
         <disable-camera />
         <disable-keyguard-features />
     </uses-policies>
+    <!--
+      Required so the current Device Owner (FrontDesk) can hand ownership to this
+      app in place via DevicePolicyManager.transferOwnership() — no factory reset.
+      This is the migration path for already-provisioned devices (issue #33).
+    -->
+    <support-transfer-ownership />
 </device-admin>
