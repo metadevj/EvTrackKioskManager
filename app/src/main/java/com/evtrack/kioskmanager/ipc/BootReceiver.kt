@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.util.Log
 import com.evtrack.kioskmanager.cdn.CdnClient
+import com.evtrack.kioskmanager.lockdown.LockdownManager
 
 /**
  * Runs on boot to kick [InstallService] when there's work:
@@ -20,11 +21,16 @@ class BootReceiver : BroadcastReceiver() {
             intent.action != Intent.ACTION_LOCKED_BOOT_COMPLETED
         ) return
 
+        val installed = isInstalled(context, CdnClient.MANAGED_PACKAGE)
         val hasPending = PendingInstall.load(context) != null
-        val needsBootstrap = !isInstalled(context, CdnClient.MANAGED_PACKAGE)
-        if (hasPending || needsBootstrap) {
-            Log.i(TAG, "Boot: hasPending=$hasPending needsBootstrap=$needsBootstrap → starting InstallService")
+        if (hasPending || !installed) {
+            // Install / bootstrap first; InstallService applies the lockdown afterwards.
+            Log.i(TAG, "Boot: hasPending=$hasPending installed=$installed → starting InstallService")
             InstallService.start(context)
+        } else {
+            // Managed app already present: just re-apply the kiosk lockdown and bring it up.
+            Log.i(TAG, "Boot: managed app present → applying kiosk lockdown")
+            LockdownManager(context).applyAndLaunch()
         }
     }
 

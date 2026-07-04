@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import com.evtrack.kioskmanager.R
+import com.evtrack.kioskmanager.lockdown.LockdownManager
 import com.evtrack.kioskmanager.update.UpdateManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -66,6 +67,13 @@ class InstallService : Service() {
                     }
                     // 3. Nothing to do (managed app present, no pending request).
                     else -> Log.i(TAG, "No pending install and managed app present; nothing to do")
+                }
+
+                // After any install/bootstrap, ensure the kiosk lockdown is granted and
+                // the managed app is brought to the front so it can pin itself.
+                val lockdown = LockdownManager(applicationContext)
+                if (lockdown.isDeviceOwner() && mgr.isManagedInstalled()) {
+                    lockdown.applyAndLaunch()
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Install processing crashed (will retry)", e)
