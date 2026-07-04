@@ -11,6 +11,8 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.evtrack.kioskmanager.cdn.ReleaseMeta
 import com.evtrack.kioskmanager.update.UpdateManager
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 /**
@@ -36,6 +38,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnInstallLatest: Button
     private lateinit var btnInstallBeta: Button
     private lateinit var btnRollback: Button
+    private lateinit var btnCancel: Button
+
+    /** The currently-running operation, so Cancel can abort a stuck download. */
+    private var currentJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -55,11 +61,13 @@ class MainActivity : AppCompatActivity() {
         btnInstallLatest = findViewById(R.id.btnInstallLatest)
         btnInstallBeta = findViewById(R.id.btnInstallBeta)
         btnRollback = findViewById(R.id.btnRollback)
+        btnCancel = findViewById(R.id.btnCancel)
 
         btnCheck.setOnClickListener { onCheck() }
         btnInstallLatest.setOnClickListener { onInstall("latest") }
         btnInstallBeta.setOnClickListener { onInstall("beta") }
         btnRollback.setOnClickListener { onRollback() }
+        btnCancel.setOnClickListener { onCancel() }
 
         refreshStatus()
     }
@@ -102,6 +110,7 @@ class MainActivity : AppCompatActivity() {
         btnInstallLatest.isEnabled = !busy
         btnInstallBeta.isEnabled = !busy
         btnRollback.isEnabled = !busy
+        btnCancel.visibility = if (busy) View.VISIBLE else View.GONE
         if (busy) {
             progressDownload.isIndeterminate = true
             progressDownload.visibility = View.VISIBLE
@@ -110,17 +119,26 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** Abort the running operation (e.g. a stuck download). */
+    private fun onCancel() {
+        setStatus("Cancelling…")
+        currentJob?.cancel()
+    }
+
     /** Check both variants on the CDN and display the resolved versions. */
     private fun onCheck() {
         setBusy(true)
         setStatus("Checking CDN…")
-        lifecycleScope.launch {
+        currentJob = lifecycleScope.launch {
             try {
                 val latest = safeCheck("latest")
                 val beta = safeCheck("beta")
                 txtLatest.text = "Latest (CDN): " + (latest?.versionBuild ?: "unavailable")
                 txtBeta.text = "Beta (CDN): " + (beta?.versionBuild ?: "unavailable")
                 setStatus("Check complete.")
+            } catch (e: CancellationException) {
+                setStatus("Cancelled.")
+                throw e
             } finally {
                 setBusy(false)
             }
@@ -142,7 +160,7 @@ class MainActivity : AppCompatActivity() {
         }
         setBusy(true)
         setStatus("Resolving $variant release…")
-        lifecycleScope.launch {
+        currentJob = lifecycleScope.launch {
             try {
                 val meta = safeCheck(variant)
                 if (meta == null) {
@@ -154,6 +172,10 @@ class MainActivity : AppCompatActivity() {
                 }
                 setStatus(result.message)
                 refreshStatus()
+            } catch (e: CancellationException) {
+                setStatus("Cancelled — download aborted.")
+                refreshStatus()
+                throw e
             } finally {
                 setBusy(false)
             }
@@ -189,11 +211,14 @@ class MainActivity : AppCompatActivity() {
         }
         setBusy(true)
         setStatus("Rolling back to last known good…")
-        lifecycleScope.launch {
+        currentJob = lifecycleScope.launch {
             try {
                 val ok = updateManager.rollback()
                 setStatus(if (ok) "Rolled back to last known good." else "Rollback unavailable (no snapshot).")
                 refreshStatus()
+            } catch (e: CancellationException) {
+                setStatus("Cancelled.")
+                throw e
             } finally {
                 setBusy(false)
             }

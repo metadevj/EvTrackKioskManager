@@ -1,7 +1,11 @@
 package com.evtrack.kioskmanager.update
 
 import android.util.Log
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.DisposableHandle
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.HttpURLConnection
@@ -32,6 +36,8 @@ class ApkDownloader {
         withContext(Dispatchers.IO) {
             val tmp = File(dest.parentFile, dest.name + ".part")
             var conn: HttpURLConnection? = null
+            // On cancellation, disconnect from the canceller's thread so a stuck/blocked read unblocks.
+            var cancelHandle: DisposableHandle? = null
             try {
                 dest.parentFile?.mkdirs()
                 tmp.delete()
@@ -48,6 +54,12 @@ class ApkDownloader {
                     )
                 }
 
+                // Immediate cancel: disconnecting the live connection interrupts a hung read.
+                val liveConn = conn
+                cancelHandle = coroutineContext[Job]?.invokeOnCompletion {
+                    runCatching { liveConn.disconnect() }
+                }
+
                 // Content-Length may be -1 if the server doesn't send it (then % is unknown).
                 val total = conn.contentLengthLong
                 var read = 0L
@@ -59,6 +71,7 @@ class ApkDownloader {
                     tmp.outputStream().use { output ->
                         val buf = ByteArray(64 * 1024)
                         while (true) {
+                            ensureActive() // cooperative cancellation between chunks
                             val n = input.read(buf)
                             if (n < 0) break
                             output.write(buf, 0, n)
@@ -93,11 +106,17 @@ class ApkDownloader {
                 }
                 Log.i(TAG, "Downloaded ${dest.name} (${dest.length()} bytes, sha256=$actualSha)")
                 Result.success(dest)
+            } catch (e: CancellationException) {
+                // Cancelled (e.g. user hit Cancel) — clean up the partial file and propagate.
+                tmp.delete()
+                Log.i(TAG, "Download cancelled for $url")
+                throw e
             } catch (e: Exception) {
                 tmp.delete()
                 Log.e(TAG, "Download error for $url", e)
                 Result.failure(e)
             } finally {
+                cancelHandle?.dispose()
                 conn?.disconnect()
             }
         }
