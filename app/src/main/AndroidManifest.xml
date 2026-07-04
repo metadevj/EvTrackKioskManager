@@ -113,6 +113,29 @@
             </intent-filter>
         </receiver>
 
+        <!--
+          QR / NFC Device Owner provisioning (Android 12+). The system calls these
+          during enrollment to pick the management mode and confirm compliance.
+          Not used by adb `dpm set-device-owner`. See issue #34.
+        -->
+        <activity
+            android:name=".provisioning.GetProvisioningModeActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.app.action.GET_PROVISIONING_MODE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".provisioning.PolicyComplianceActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.app.action.ADMIN_POLICY_COMPLIANCE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
     </application>
 
 </manifest>
