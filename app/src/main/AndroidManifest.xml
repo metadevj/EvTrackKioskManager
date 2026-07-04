@@ -27,6 +27,16 @@
         android:name="com.evtrack.kioskmanager.permission.INSTALL_REQUEST"
         android:protectionLevel="signature" />
 
+    <!--
+      Android 11+ package visibility: without this, the Manager cannot see the
+      managed app via PackageManager (getPackageInfo throws NameNotFound), so
+      installedVersion()/isManagedInstalled() would wrongly report it absent and
+      the bootstrap path would reinstall over an existing app.
+    -->
+    <queries>
+        <package android:name="com.evtrack.frontdesk" />
+    </queries>
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"

@@ -91,9 +91,12 @@ class UpdateManager(
      * Download, verify, snapshot last-known-good, then install [meta].
      * On install failure, automatically attempts [rollback].
      */
-    suspend fun updateTo(meta: ReleaseMeta): UpdateResult {
+    suspend fun updateTo(
+        meta: ReleaseMeta,
+        onProgress: ((bytesRead: Long, total: Long) -> Unit)? = null,
+    ): UpdateResult {
         // 1. Download + verify SHA-256 into current.apk.
-        val dl = downloader.download(meta.downloadUrl, currentApk, meta.sha256)
+        val dl = downloader.download(meta.downloadUrl, currentApk, meta.sha256, onProgress)
         if (dl.isFailure) {
             return UpdateResult(false, "Download/verify failed: ${dl.exceptionOrNull()?.message}")
         }

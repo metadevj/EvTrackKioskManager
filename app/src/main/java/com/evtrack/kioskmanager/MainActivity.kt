@@ -3,7 +3,9 @@ package com.evtrack.kioskmanager
 import android.app.admin.DevicePolicyManager
 import android.content.Context
 import android.os.Bundle
+import android.view.View
 import android.widget.Button
+import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -29,6 +31,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var txtBeta: TextView
     private lateinit var txtStatus: TextView
 
+    private lateinit var progressDownload: ProgressBar
+    private lateinit var btnCheck: Button
+    private lateinit var btnInstallLatest: Button
+    private lateinit var btnInstallBeta: Button
+    private lateinit var btnRollback: Button
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -42,10 +50,16 @@ class MainActivity : AppCompatActivity() {
         txtBeta = findViewById(R.id.txtBeta)
         txtStatus = findViewById(R.id.txtStatus)
 
-        findViewById<Button>(R.id.btnCheck).setOnClickListener { onCheck() }
-        findViewById<Button>(R.id.btnInstallLatest).setOnClickListener { onInstall("latest") }
-        findViewById<Button>(R.id.btnInstallBeta).setOnClickListener { onInstall("beta") }
-        findViewById<Button>(R.id.btnRollback).setOnClickListener { onRollback() }
+        progressDownload = findViewById(R.id.progressDownload)
+        btnCheck = findViewById(R.id.btnCheck)
+        btnInstallLatest = findViewById(R.id.btnInstallLatest)
+        btnInstallBeta = findViewById(R.id.btnInstallBeta)
+        btnRollback = findViewById(R.id.btnRollback)
+
+        btnCheck.setOnClickListener { onCheck() }
+        btnInstallLatest.setOnClickListener { onInstall("latest") }
+        btnInstallBeta.setOnClickListener { onInstall("beta") }
+        btnRollback.setOnClickListener { onRollback() }
 
         refreshStatus()
     }
@@ -82,15 +96,34 @@ class MainActivity : AppCompatActivity() {
         txtStatus.text = text
     }
 
+    /** Enable/disable action buttons and show/hide the progress bar for a running op. */
+    private fun setBusy(busy: Boolean) {
+        btnCheck.isEnabled = !busy
+        btnInstallLatest.isEnabled = !busy
+        btnInstallBeta.isEnabled = !busy
+        btnRollback.isEnabled = !busy
+        if (busy) {
+            progressDownload.isIndeterminate = true
+            progressDownload.visibility = View.VISIBLE
+        } else {
+            progressDownload.visibility = View.GONE
+        }
+    }
+
     /** Check both variants on the CDN and display the resolved versions. */
     private fun onCheck() {
+        setBusy(true)
         setStatus("Checking CDN…")
         lifecycleScope.launch {
-            val latest = safeCheck("latest")
-            val beta = safeCheck("beta")
-            txtLatest.text = "Latest (CDN): " + (latest?.versionBuild ?: "unavailable")
-            txtBeta.text = "Beta (CDN): " + (beta?.versionBuild ?: "unavailable")
-            setStatus("Check complete.")
+            try {
+                val latest = safeCheck("latest")
+                val beta = safeCheck("beta")
+                txtLatest.text = "Latest (CDN): " + (latest?.versionBuild ?: "unavailable")
+                txtBeta.text = "Beta (CDN): " + (beta?.versionBuild ?: "unavailable")
+                setStatus("Check complete.")
+            } finally {
+                setBusy(false)
+            }
         }
     }
 
@@ -101,23 +134,51 @@ class MainActivity : AppCompatActivity() {
         null
     }
 
-    /** Download + install (or update) the given [variant]. */
+    /** Download + install (or update) the given [variant], with a live progress bar. */
     private fun onInstall(variant: String) {
         if (!isDeviceOwner()) {
             setStatus("Cannot install: not Device Owner. See the note above.")
             return
         }
+        setBusy(true)
         setStatus("Resolving $variant release…")
         lifecycleScope.launch {
-            val meta = safeCheck(variant)
-            if (meta == null) {
-                setStatus("No $variant release found on CDN.")
-                return@launch
+            try {
+                val meta = safeCheck(variant)
+                if (meta == null) {
+                    setStatus("No $variant release found on CDN.")
+                    return@launch
+                }
+                val result = updateManager.updateTo(meta) { read, total ->
+                    runOnUiThread { onDownloadProgress(meta.versionBuild, read, total) }
+                }
+                setStatus(result.message)
+                refreshStatus()
+            } finally {
+                setBusy(false)
             }
-            setStatus("Downloading & installing ${meta.versionBuild}…")
-            val result = updateManager.updateTo(meta)
-            setStatus(result.message)
-            refreshStatus()
+        }
+    }
+
+    /**
+     * UI-thread progress handler: fills the bar during download, and flips to an
+     * indeterminate "Installing…" once all bytes are in (install isn't trackable).
+     */
+    private fun onDownloadProgress(versionBuild: String, read: Long, total: Long) {
+        val mb = 1024L * 1024
+        if (total > 0) {
+            if (read >= total) {
+                progressDownload.isIndeterminate = true
+                setStatus("Installing $versionBuild…")
+            } else {
+                val pct = ((read * 100) / total).toInt().coerceIn(0, 100)
+                progressDownload.isIndeterminate = false
+                progressDownload.progress = pct
+                setStatus("Downloading $versionBuild…  $pct%  (${read / mb}/${total / mb} MB)")
+            }
+        } else {
+            progressDownload.isIndeterminate = true
+            setStatus("Downloading $versionBuild…  ${read / mb} MB")
         }
     }
 
@@ -126,11 +187,16 @@ class MainActivity : AppCompatActivity() {
             setStatus("Cannot roll back: not Device Owner.")
             return
         }
+        setBusy(true)
         setStatus("Rolling back to last known good…")
         lifecycleScope.launch {
-            val ok = updateManager.rollback()
-            setStatus(if (ok) "Rolled back to last known good." else "Rollback unavailable (no snapshot).")
-            refreshStatus()
+            try {
+                val ok = updateManager.rollback()
+                setStatus(if (ok) "Rolled back to last known good." else "Rollback unavailable (no snapshot).")
+                refreshStatus()
+            } finally {
+                setBusy(false)
+            }
         }
     }
 }

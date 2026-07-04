@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">EvTrack Kiosk Manager</string>
+    <string name="app_name">Kiosk Manager</string>
     <string name="install_channel_name">App install</string>
     <string name="install_notif_title">EvTrack Kiosk Manager</string>
     <string name="install_notif_text">Installing kiosk app update…</string>

@@ -23,7 +23,12 @@ class ApkDownloader {
      *
      * @return [Result] wrapping [dest] on success.
      */
-    suspend fun download(url: String, dest: File, expectedSha256: String?): Result<File> =
+    suspend fun download(
+        url: String,
+        dest: File,
+        expectedSha256: String?,
+        onProgress: ((bytesRead: Long, total: Long) -> Unit)? = null,
+    ): Result<File> =
         withContext(Dispatchers.IO) {
             val tmp = File(dest.parentFile, dest.name + ".part")
             var conn: HttpURLConnection? = null
@@ -43,6 +48,12 @@ class ApkDownloader {
                     )
                 }
 
+                // Content-Length may be -1 if the server doesn't send it (then % is unknown).
+                val total = conn.contentLengthLong
+                var read = 0L
+                var lastReported = 0L
+                onProgress?.invoke(0, total)
+
                 val digest = MessageDigest.getInstance("SHA-256")
                 conn.inputStream.use { input ->
                     tmp.outputStream().use { output ->
@@ -52,10 +63,17 @@ class ApkDownloader {
                             if (n < 0) break
                             output.write(buf, 0, n)
                             digest.update(buf, 0, n)
+                            read += n
+                            // Throttle UI updates to ~1 MB steps to avoid flooding the main thread.
+                            if (onProgress != null && read - lastReported >= PROGRESS_STEP_BYTES) {
+                                lastReported = read
+                                onProgress(read, total)
+                            }
                         }
                         output.flush()
                     }
                 }
+                onProgress?.invoke(read, total)
 
                 val actualSha = digest.digest().joinToString("") { "%02x".format(it) }
                 if (expectedSha256 != null && !expectedSha256.equals(actualSha, ignoreCase = true)) {
@@ -86,5 +104,8 @@ class ApkDownloader {
 
     companion object {
         private const val TAG = "ApkDownloader"
+
+        /** Report download progress at most every ~1 MB. */
+        private const val PROGRESS_STEP_BYTES = 1L * 1024 * 1024
     }
 }
