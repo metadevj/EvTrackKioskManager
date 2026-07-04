@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/app_name"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:paddingBottom="12dp" />
+
+        <!-- Status rows -->
+        <TextView
+            android:id="@+id/txtDeviceOwner"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Device Owner: …"
+            android:textSize="16sp"
+            android:paddingBottom="4dp" />
+
+        <TextView
+            android:id="@+id/txtNotOwnerHint"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#B00020"
+            android:textSize="13sp"
+            android:visibility="gone"
+            android:paddingBottom="8dp" />
+
+        <TextView
+            android:id="@+id/txtInstalled"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Installed (com.evtrack.frontdesk): …"
+            android:textSize="16sp"
+            android:paddingBottom="4dp" />
+
+        <TextView
+            android:id="@+id/txtLatest"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Latest (CDN): …"
+            android:textSize="16sp"
+            android:paddingBottom="4dp" />
+
+        <TextView
+            android:id="@+id/txtBeta"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Beta (CDN): …"
+            android:textSize="16sp"
+            android:paddingBottom="12dp" />
+
+        <!-- Actions -->
+        <Button
+            android:id="@+id/btnCheck"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Check for update" />
+
+        <Button
+            android:id="@+id/btnInstallLatest"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Install / Update (latest)" />
+
+        <Button
+            android:id="@+id/btnInstallBeta"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Install beta" />
+
+        <Button
+            android:id="@+id/btnRollback"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Rollback (last known good)" />
+
+        <TextView
+            android:id="@+id/txtStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingTop="16dp"
+            android:textSize="14sp"
+            android:fontFamily="monospace"
+            android:text="Ready." />
+
+    </LinearLayout>
+</ScrollView>
