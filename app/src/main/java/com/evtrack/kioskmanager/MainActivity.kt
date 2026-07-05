@@ -13,6 +13,7 @@ import com.evtrack.kioskmanager.cdn.ReleaseMeta
 import com.evtrack.kioskmanager.update.UpdateManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -70,6 +71,30 @@ class MainActivity : AppCompatActivity() {
         btnCancel.setOnClickListener { onCancel() }
 
         refreshStatus()
+        autoCheckCdn()
+    }
+
+    /**
+     * Populate the Latest/Beta CDN rows on launch (without the busy/disable UI) so
+     * they don't sit on "…". Retries for a while because at first boot the network
+     * may not be up yet.
+     */
+    private fun autoCheckCdn() {
+        lifecycleScope.launch {
+            repeat(10) {
+                val latest = try { updateManager.checkForUpdate("latest") } catch (e: Exception) { null }
+                val beta = try { updateManager.checkForUpdate("beta") } catch (e: Exception) { null }
+                if (latest != null || beta != null) {
+                    txtLatest.text = "Latest (CDN): " + (latest?.versionBuild ?: "unavailable")
+                    txtBeta.text = "Beta (CDN): " + (beta?.versionBuild ?: "unavailable")
+                    return@launch
+                }
+                txtLatest.text = "Latest (CDN): checking…"
+                delay(3000)
+            }
+            txtLatest.text = "Latest (CDN): unavailable"
+            txtBeta.text = "Beta (CDN): unavailable"
+        }
     }
 
     override fun onResume() {

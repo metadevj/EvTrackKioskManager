@@ -17,6 +17,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -62,8 +63,18 @@ class InstallService : Service() {
                     // 2. Fresh device: no FrontDesk yet, so bootstrap it from the CDN (issue #31).
                     !mgr.isManagedInstalled() -> {
                         Log.i(TAG, "Managed app absent; bootstrapping latest from CDN")
-                        val result = mgr.bootstrapLatest()
-                        Log.i(TAG, "Bootstrap result: success=${result.success} — ${result.message}")
+                        // At first boot the network (Ethernet/DHCP) is often not up yet, so the
+                        // CDN fetch fails. Retry with a backoff until it takes or we cap out.
+                        var result = mgr.bootstrapLatest()
+                        var attempt = 1
+                        while (!result.success && attempt < MAX_BOOTSTRAP_ATTEMPTS) {
+                            Log.w(TAG, "Bootstrap attempt $attempt failed: ${result.message}; retrying")
+                            delay(BOOTSTRAP_RETRY_MS)
+                            if (mgr.isManagedInstalled()) break // installed via another path meanwhile
+                            result = mgr.bootstrapLatest()
+                            attempt++
+                        }
+                        Log.i(TAG, "Bootstrap result: success=${result.success} — ${result.message} (attempts=$attempt)")
                     }
                     // 3. Nothing to do (managed app present, no pending request).
                     else -> Log.i(TAG, "No pending install and managed app present; nothing to do")
@@ -122,6 +133,10 @@ class InstallService : Service() {
         private const val TAG = "InstallService"
         private const val CHANNEL_ID = "install"
         private const val NOTIF_ID = 42
+
+        // Bootstrap retry: covers the network coming up shortly after boot.
+        private const val MAX_BOOTSTRAP_ATTEMPTS = 20   // ~2 min at 6s spacing
+        private const val BOOTSTRAP_RETRY_MS = 6_000L
 
         /** Start the service (foreground on O+). Safe to call repeatedly. */
         fun start(context: Context) {
