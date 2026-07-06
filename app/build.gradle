@@ -3,6 +3,14 @@ plugins {
     id 'org.jetbrains.kotlin.android'
 }
 
+// ── Version ─────────────────────────────────────────────────────────────────
+// Single source of truth: the root VERSION file (MAJOR.MINOR.BUILD).
+// Bump it with ./scripts/bump-version.sh. versionCode = the BUILD component,
+// which always increments on a bump, so it stays monotonic across releases.
+def versionFile = rootProject.file('VERSION')
+def evtrackVersionName = versionFile.exists() ? versionFile.text.trim() : '1.0.0'
+def evtrackVersionCode = evtrackVersionName.tokenize('.').last().toInteger()
+
 android {
     namespace 'com.evtrack.kioskmanager'
     compileSdk 34
@@ -11,8 +19,8 @@ android {
         applicationId "com.evtrack.kioskmanager"
         minSdk 26
         targetSdk 34
-        versionCode 1
-        versionName "1.0.0"
+        versionCode evtrackVersionCode
+        versionName evtrackVersionName
     }
 
     // Release signing via environment variables (see build.sh / release/keys.sh).

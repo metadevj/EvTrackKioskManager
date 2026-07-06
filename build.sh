@@ -36,10 +36,13 @@ for arg in "$@"; do
     esac
 done
 
+VERSION=$(cat VERSION 2>/dev/null | tr -d '[:space:]')
+APK_ASSET="evtrack-kiosk-manager-universal-release.apk"
+
 echo ""
 echo "========================================"
 echo "  EvTrack Kiosk Manager - Build"
-echo "  Version: $(grep versionName app/build.gradle | head -1 | tr -d ' "' | cut -d= -f2 2>/dev/null)"
+echo "  Version: ${VERSION:-unknown}"
 echo "========================================"
 
 if [ -z "$EVTRACK_KEYSTORE_FILE" ] || [ -z "$EVTRACK_KEYSTORE_PASSWORD" ] || \
@@ -52,9 +55,19 @@ fi
 
 ./gradlew $CLEAN assembleRelease
 
-echo ""
-echo "APK:"
-find app/build/outputs/apk/release -name "*.apk" -exec echo "  {}" \; 2>/dev/null
+# Stage the built APK under the EvTrack naming convention
+# (<app-slug>-universal-release.apk) so downstream — the OS image embed, the
+# CDN mirror, and the GitHub release asset — all use the same filename.
+GRADLE_APK="app/build/outputs/apk/release/app-release.apk"
+mkdir -p dist
+if [ -f "$GRADLE_APK" ]; then
+    cp -f "$GRADLE_APK" "dist/$APK_ASSET"
+fi
 
 echo ""
-echo "Verify signature:  apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk"
+echo "APK:"
+echo "  $GRADLE_APK"
+echo "  dist/$APK_ASSET   (release/CDN name)"
+
+echo ""
+echo "Verify signature:  apksigner verify --print-certs dist/$APK_ASSET"

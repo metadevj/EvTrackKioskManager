@@ -1,0 +1,62 @@
+# =============================================================================
+# Create a GitHub Release when a version tag is pushed
+# =============================================================================
+#
+# Triggered by pushing a tag like v1.0.2:
+#   git push origin v1.0.2
+#
+# Releases are cut from master ONLY (no beta releases). The signed APK is built
+# locally (the signing keys are not in CI) and uploaded by push-release.sh via
+# `gh release upload` under the convention name:
+#   evtrack-kiosk-manager-universal-release.apk
+#
+# This workflow just creates the release shell and fills the notes from
+# RELEASE.md; push-release.sh attaches the APK.
+#
+# =============================================================================
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract version
+        id: meta
+        run: |
+          VERSION=$(cat VERSION | tr -d '[:space:]')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Extract release notes from RELEASE.md
+        run: |
+          VERSION="${{ steps.meta.outputs.version }}"
+
+          NOTES=$(awk "
+            /^## \[${VERSION}\]/{found=1; next}
+            /^## \[/{if(found) exit}
+            found{print}
+          " RELEASE.md)
+
+          if [ -z "$NOTES" ]; then
+            NOTES="Release $VERSION"
+          fi
+
+          echo "$NOTES" > /tmp/release-notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "EvTrack Kiosk Manager v${{ steps.meta.outputs.version }}"
+          body_path: /tmp/release-notes.md
+          generate_release_notes: false

@@ -9,6 +9,7 @@
 .externalNativeBuild
 .cxx/
 /app/build/
+/dist/
 
 # Signing keystores and secrets
 *.keystore
