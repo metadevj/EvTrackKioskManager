@@ -92,6 +92,31 @@ EVTRACK_KEY_ALIAS       EVTRACK_KEY_PASSWORD
 
 `build.sh` sources these from `keys.sh` (override path via `EVTRACK_KEYS_SH`).
 
+## Publishing to the CDN
+
+Separately from the GitHub release, the same signed APK is published to the
+EvTrack APK CDN (`downloads.evtrack.com/public/apk`) — what QR provisioning and
+fresh-device bootstrap pull from. Run it as its own step after a release:
+
+```bash
+./publish-cdn.sh              # publish dist/<apk> to the CDN
+./publish-cdn.sh --dry-run    # stage + show the rclone plan, upload nothing
+```
+
+It follows the live CDN convention — **version sorted by folder, constant
+filename**:
+
+```
+evtrack-kiosk-manager/<version>.<build>/evtrack-kiosk-manager-universal-release.apk
+evtrack-kiosk-manager/latest/evtrack-kiosk-manager-universal-release.json
+    { name, version, build, sha256 }
+```
+
+version/build come from `VERSION` (1.0.2 → version `1.0`, build `2`). Upload is
+`rclone copy` (no deletes — old versions are kept). Requires `S3/rclone.conf`
+with an `[evtrack-downloads]` R2 remote — copy `S3/rclone.conf.example` and fill
+in the Cloudflare R2 credentials (the real config is gitignored).
+
 ## Quick reference
 
 | Task | Command |

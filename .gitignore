@@ -10,8 +10,12 @@
 .cxx/
 /app/build/
 /dist/
+/cdn/
 
 # Signing keystores and secrets
 *.keystore
 *.jks
 keystore.properties
+
+# rclone / R2 credentials (real config; template is committed)
+/S3/rclone.conf

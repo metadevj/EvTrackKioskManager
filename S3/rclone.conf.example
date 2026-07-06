@@ -1,0 +1,16 @@
+# rclone config for publishing the Kiosk Manager APK to the EvTrack APK CDN.
+#
+# Copy this file to  S3/rclone.conf  and fill in the Cloudflare R2 credentials.
+# publish-cdn.sh uploads to the [evtrack-downloads] remote. The real config is
+# gitignored — nothing secret is committed.
+#
+# The bucket root maps to https://downloads.evtrack.com/, so object keys start
+# with "public/apk/...". Override the remote:bucket via EVTRACK_DOWNLOADS_REMOTE
+# and the config path via EVTRACK_RCLONE_CONF.
+[evtrack-downloads]
+type = s3
+provider = Cloudflare
+access_key_id = YOUR_R2_ACCESS_KEY
+secret_access_key = YOUR_R2_SECRET_KEY
+endpoint = https://YOUR_ACCOUNT_ID.r2.cloudflarestorage.com
+acl = private
