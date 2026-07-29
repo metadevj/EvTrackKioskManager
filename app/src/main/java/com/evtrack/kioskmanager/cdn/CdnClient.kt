@@ -8,6 +8,29 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
+ * A flavour of the managed app as published on the CDN.
+ *
+ * Normal and Eida install as the **same** package ([CdnClient.MANAGED_PACKAGE]) — they
+ * differ only in the CDN folder and the artifact/pointer basename (Eida enables the
+ * Emirates-ID scanning build type). Because they share a package they are mutually
+ * exclusive: installing one replaces the other.
+ */
+enum class Flavour(
+    val displayName: String,
+    val folder: String,
+    private val basename: String,
+) {
+    NORMAL("FrontDesk", "evtrack-front-desk", "evtrack-front-desk-universal-release"),
+    EIDA("FrontDesk Eida", "evtrack-front-desk-eida", "evtrack-front-desk-eida-universal-release");
+
+    /** Per-version pointer JSON filename for this flavour. */
+    val pointerJson get() = "$basename.json"
+
+    /** Universal release APK filename for this flavour. */
+    val apkFilename get() = "$basename.apk"
+}
+
+/**
  * Metadata for one CDN release of the managed app.
  *
  * @param version marketing/version string (e.g. "2.4.1")
@@ -26,26 +49,31 @@ data class ReleaseMeta(
 }
 
 /**
- * Discovers the latest published build of the managed kiosk app on the public CDN.
+ * Discovers published builds of the managed kiosk app on the public CDN.
  *
- * Ported from the EvTrack web updater JS — the URL scheme is reused verbatim so both
- * clients resolve the same artifacts.
+ * The URL scheme matches the EvTrack web updater (see the deployment app's
+ * `apk-discover.js`) so all clients resolve the same artifacts.
  *
- * CDN layout (base = [DEFAULT_BASE]):
- *   $base/evtrack-front-desk/<variant>/evtrack-front-desk-universal-release.json   (pointer)
- *   $base/evtrack-front-desk/<version>.<build>/evtrack-front-desk-universal-release.apk (artifact)
+ * CDN layout (base = [DEFAULT_BASE]) — parameterised by [Flavour] and channel:
+ *   $base/<flavour.folder>/<channel>/<flavour.pointerJson>         (pointer)
+ *   $base/<flavour.folder>/<version>.<build>/<flavour.apkFilename> (artifact)
+ * where <channel> is "latest" (main) or "beta".
  *
  * The pointer JSON looks like:
  *   { "apps": [ { "version": "...", "build": "...", "sha256": "..." }, ... ] }
- * and we take apps[0] as the current release for that variant.
+ * and we take apps[0] as the current release for that flavour + channel.
  *
  * @param base override for the CDN base URL (tests / staging). Defaults to [DEFAULT_BASE].
  */
 class CdnClient(private val base: String = DEFAULT_BASE) {
 
-    suspend fun fetchLatest(variant: String): ReleaseMeta? = withContext(Dispatchers.IO) {
+    /**
+     * Discover the latest published build of [flavour] on [channel] ("latest" | "beta"),
+     * or `null` if that flavour/channel isn't published or the fetch fails.
+     */
+    suspend fun fetchLatest(flavour: Flavour, channel: String): ReleaseMeta? = withContext(Dispatchers.IO) {
         // Cache-buster: the pointer JSON changes in place, so defeat any CDN/proxy cache.
-        val url = "$base/$MANAGED_FOLDER/$variant/$POINTER_JSON?r=${System.nanoTime()}"
+        val url = "$base/${flavour.folder}/$channel/${flavour.pointerJson}?r=${System.nanoTime()}"
         val body = httpGet(url) ?: return@withContext null
 
         try {
@@ -59,7 +87,7 @@ class CdnClient(private val base: String = DEFAULT_BASE) {
                 ?: return@withContext null
             val sha256 = app.optString("sha256").takeIf { it.isNotEmpty() }
 
-            val downloadUrl = "$base/$MANAGED_FOLDER/$version.$build/$APK_FILENAME"
+            val downloadUrl = "$base/${flavour.folder}/$version.$build/${flavour.apkFilename}"
             ReleaseMeta(version = version, build = build, sha256 = sha256, downloadUrl = downloadUrl)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to parse release pointer from $url", e)
@@ -67,19 +95,23 @@ class CdnClient(private val base: String = DEFAULT_BASE) {
         }
     }
 
+    /** Legacy convenience: latest of the [Flavour.NORMAL] flavour on [channel]. */
+    suspend fun fetchLatest(channel: String): ReleaseMeta? = fetchLatest(Flavour.NORMAL, channel)
+
     /**
-     * Resolve a PINNED build (exact version + build) to a downloadable [ReleaseMeta].
+     * Resolve a PINNED build (exact version + build) of [flavour] to a downloadable
+     * [ReleaseMeta].
      *
      * The APK URL is deterministic ($base/<folder>/<version>.<build>/<apk>), so this
-     * never needs the variant pointer. We additionally *try* the per-version pointer
+     * never needs the channel pointer. We additionally *try* the per-version pointer
      * JSON in the same folder for an optional sha256, but its absence is fine — the
      * install still enforces the APK signature regardless.
      */
-    suspend fun fetchPinned(version: String, build: String): ReleaseMeta = withContext(Dispatchers.IO) {
+    suspend fun fetchPinned(flavour: Flavour, version: String, build: String): ReleaseMeta = withContext(Dispatchers.IO) {
         val folder = "$version.$build"
-        val downloadUrl = "$base/$MANAGED_FOLDER/$folder/$APK_FILENAME"
+        val downloadUrl = "$base/${flavour.folder}/$folder/${flavour.apkFilename}"
         val sha256 = try {
-            val body = httpGet("$base/$MANAGED_FOLDER/$folder/$POINTER_JSON?r=${System.nanoTime()}")
+            val body = httpGet("$base/${flavour.folder}/$folder/${flavour.pointerJson}?r=${System.nanoTime()}")
             body?.let {
                 JSONObject(it).optJSONArray("apps")
                     ?.optJSONObject(0)
@@ -91,6 +123,10 @@ class CdnClient(private val base: String = DEFAULT_BASE) {
         }
         ReleaseMeta(version = version, build = build, sha256 = sha256, downloadUrl = downloadUrl)
     }
+
+    /** Legacy convenience: pinned build of the [Flavour.NORMAL] flavour. */
+    suspend fun fetchPinned(version: String, build: String): ReleaseMeta =
+        fetchPinned(Flavour.NORMAL, version, build)
 
     private fun httpGet(urlStr: String): String? {
         var conn: HttpURLConnection? = null
@@ -121,12 +157,7 @@ class CdnClient(private val base: String = DEFAULT_BASE) {
         /** Public CDN base URL for released APKs. Overridable via the constructor. */
         const val DEFAULT_BASE = "https://downloads.evtrack.com/public/apk"
 
-        /** CDN folder + artifact names for the managed app. */
-        const val MANAGED_FOLDER = "evtrack-front-desk"
-        const val APK_FILENAME = "evtrack-front-desk-universal-release.apk"
-        const val POINTER_JSON = "evtrack-front-desk-universal-release.json"
-
-        /** Package name of the app this manager installs/updates. */
+        /** Package name of the app this manager installs/updates (same for every flavour). */
         const val MANAGED_PACKAGE = "com.evtrack.frontdesk"
     }
 }

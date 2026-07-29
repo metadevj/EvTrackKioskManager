@@ -9,6 +9,7 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import com.evtrack.kioskmanager.cdn.Flavour
 import com.evtrack.kioskmanager.cdn.ReleaseMeta
 import com.evtrack.kioskmanager.update.UpdateManager
 import kotlinx.coroutines.CancellationException
@@ -19,9 +20,12 @@ import kotlinx.coroutines.launch
 /**
  * Simple manual control surface for the kiosk manager (v1).
  *
- * Shows Device Owner status, the installed managed-app version, and the latest/beta
- * CDN versions; buttons drive the [UpdateManager]. Deliberately plain and readable —
- * server-push (issue #26) will reuse the same UpdateManager entry points.
+ * Shows Device Owner status, the installed managed-app version, and the CDN version of
+ * every installable option — both channels (Main = "latest", Beta) for both flavours
+ * (Normal + Eida). Each option has its own install button; they all install the same
+ * package ([UpdateManager.managedPackage]) and are therefore mutually exclusive.
+ * Deliberately plain and readable — server-push (issue #26) reuses the same
+ * UpdateManager entry points.
  */
 class MainActivity : AppCompatActivity() {
 
@@ -30,16 +34,32 @@ class MainActivity : AppCompatActivity() {
     private lateinit var txtDeviceOwner: TextView
     private lateinit var txtNotOwnerHint: TextView
     private lateinit var txtInstalled: TextView
-    private lateinit var txtLatest: TextView
-    private lateinit var txtBeta: TextView
     private lateinit var txtStatus: TextView
 
     private lateinit var progressDownload: ProgressBar
     private lateinit var btnCheck: Button
-    private lateinit var btnInstallLatest: Button
-    private lateinit var btnInstallBeta: Button
     private lateinit var btnRollback: Button
     private lateinit var btnCancel: Button
+
+    /** One installable {flavour × channel} choice, bound to a version row + install button. */
+    private data class InstallOption(
+        val flavour: Flavour,
+        val channel: String,        // "latest" (Main) | "beta"
+        val label: String,          // e.g. "FrontDesk — Main"
+        val versionViewId: Int,
+        val buttonViewId: Int,
+    )
+
+    /** The four options, in display order. */
+    private val options = listOf(
+        InstallOption(Flavour.NORMAL, "latest", "FrontDesk — Main", R.id.txtNormalMain, R.id.btnNormalMain),
+        InstallOption(Flavour.NORMAL, "beta", "FrontDesk — Beta", R.id.txtNormalBeta, R.id.btnNormalBeta),
+        InstallOption(Flavour.EIDA, "latest", "FrontDesk Eida — Main", R.id.txtEidaMain, R.id.btnEidaMain),
+        InstallOption(Flavour.EIDA, "beta", "FrontDesk Eida — Beta", R.id.txtEidaBeta, R.id.btnEidaBeta),
+    )
+
+    /** Install buttons, so [setBusy] can enable/disable them together. */
+    private val optionButtons = mutableListOf<Button>()
 
     /** The currently-running operation, so Cancel can abort a stuck download. */
     private var currentJob: Job? = null
@@ -53,20 +73,20 @@ class MainActivity : AppCompatActivity() {
         txtDeviceOwner = findViewById(R.id.txtDeviceOwner)
         txtNotOwnerHint = findViewById(R.id.txtNotOwnerHint)
         txtInstalled = findViewById(R.id.txtInstalled)
-        txtLatest = findViewById(R.id.txtLatest)
-        txtBeta = findViewById(R.id.txtBeta)
         txtStatus = findViewById(R.id.txtStatus)
 
         progressDownload = findViewById(R.id.progressDownload)
         btnCheck = findViewById(R.id.btnCheck)
-        btnInstallLatest = findViewById(R.id.btnInstallLatest)
-        btnInstallBeta = findViewById(R.id.btnInstallBeta)
         btnRollback = findViewById(R.id.btnRollback)
         btnCancel = findViewById(R.id.btnCancel)
 
+        for (opt in options) {
+            val btn = findViewById<Button>(opt.buttonViewId)
+            optionButtons.add(btn)
+            btn.setOnClickListener { onInstall(opt) }
+        }
+
         btnCheck.setOnClickListener { onCheck() }
-        btnInstallLatest.setOnClickListener { onInstall("latest") }
-        btnInstallBeta.setOnClickListener { onInstall("beta") }
         btnRollback.setOnClickListener { onRollback() }
         btnCancel.setOnClickListener { onCancel() }
 
@@ -75,25 +95,23 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Populate the Latest/Beta CDN rows on launch (without the busy/disable UI) so
-     * they don't sit on "…". Retries for a while because at first boot the network
-     * may not be up yet.
+     * Populate every option's CDN version on launch (without the busy/disable UI) so the
+     * rows don't sit on "…". Retries for a while because at first boot the network may
+     * not be up yet.
      */
     private fun autoCheckCdn() {
         lifecycleScope.launch {
             repeat(10) {
-                val latest = try { updateManager.checkForUpdate("latest") } catch (e: Exception) { null }
-                val beta = try { updateManager.checkForUpdate("beta") } catch (e: Exception) { null }
-                if (latest != null || beta != null) {
-                    txtLatest.text = "Latest (CDN): " + (latest?.versionBuild ?: "unavailable")
-                    txtBeta.text = "Beta (CDN): " + (beta?.versionBuild ?: "unavailable")
-                    return@launch
+                var anyResolved = false
+                for (opt in options) {
+                    val meta = try { updateManager.checkForUpdate(opt.flavour, opt.channel) } catch (e: Exception) { null }
+                    setOptionVersion(opt, meta)
+                    if (meta != null) anyResolved = true
                 }
-                txtLatest.text = "Latest (CDN): checking…"
+                if (anyResolved) return@launch
+                for (opt in options) versionView(opt).text = "${opt.label} (CDN): checking…"
                 delay(3000)
             }
-            txtLatest.text = "Latest (CDN): unavailable"
-            txtBeta.text = "Beta (CDN): unavailable"
         }
     }
 
@@ -125,6 +143,12 @@ class MainActivity : AppCompatActivity() {
         return dpm.isDeviceOwnerApp(packageName)
     }
 
+    private fun versionView(opt: InstallOption): TextView = findViewById(opt.versionViewId)
+
+    private fun setOptionVersion(opt: InstallOption, meta: ReleaseMeta?) {
+        versionView(opt).text = "${opt.label} (CDN): " + (meta?.versionBuild ?: "unavailable")
+    }
+
     private fun setStatus(text: String) {
         txtStatus.text = text
     }
@@ -132,9 +156,8 @@ class MainActivity : AppCompatActivity() {
     /** Enable/disable action buttons and show/hide the progress bar for a running op. */
     private fun setBusy(busy: Boolean) {
         btnCheck.isEnabled = !busy
-        btnInstallLatest.isEnabled = !busy
-        btnInstallBeta.isEnabled = !busy
         btnRollback.isEnabled = !busy
+        for (b in optionButtons) b.isEnabled = !busy
         btnCancel.visibility = if (busy) View.VISIBLE else View.GONE
         if (busy) {
             progressDownload.isIndeterminate = true
@@ -150,16 +173,13 @@ class MainActivity : AppCompatActivity() {
         currentJob?.cancel()
     }
 
-    /** Check both variants on the CDN and display the resolved versions. */
+    /** Check every option on the CDN and display the resolved versions. */
     private fun onCheck() {
         setBusy(true)
         setStatus("Checking CDN…")
         currentJob = lifecycleScope.launch {
             try {
-                val latest = safeCheck("latest")
-                val beta = safeCheck("beta")
-                txtLatest.text = "Latest (CDN): " + (latest?.versionBuild ?: "unavailable")
-                txtBeta.text = "Beta (CDN): " + (beta?.versionBuild ?: "unavailable")
+                for (opt in options) setOptionVersion(opt, safeCheck(opt))
                 setStatus("Check complete.")
             } catch (e: CancellationException) {
                 setStatus("Cancelled.")
@@ -170,26 +190,26 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private suspend fun safeCheck(variant: String): ReleaseMeta? = try {
-        updateManager.checkForUpdate(variant)
+    private suspend fun safeCheck(opt: InstallOption): ReleaseMeta? = try {
+        updateManager.checkForUpdate(opt.flavour, opt.channel)
     } catch (e: Exception) {
-        setStatus("Check failed ($variant): ${e.message}")
+        setStatus("Check failed (${opt.label}): ${e.message}")
         null
     }
 
-    /** Download + install (or update) the given [variant], with a live progress bar. */
-    private fun onInstall(variant: String) {
+    /** Download + install (or update) the given [opt], with a live progress bar. */
+    private fun onInstall(opt: InstallOption) {
         if (!isDeviceOwner()) {
             setStatus("Cannot install: not Device Owner. See the note above.")
             return
         }
         setBusy(true)
-        setStatus("Resolving $variant release…")
+        setStatus("Resolving ${opt.label}…")
         currentJob = lifecycleScope.launch {
             try {
-                val meta = safeCheck(variant)
+                val meta = safeCheck(opt)
                 if (meta == null) {
-                    setStatus("No $variant release found on CDN.")
+                    setStatus("No ${opt.label} release found on CDN.")
                     return@launch
                 }
                 val result = updateManager.updateTo(meta) { read, total ->

@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.util.Log
 import com.evtrack.kioskmanager.cdn.CdnClient
+import com.evtrack.kioskmanager.cdn.Flavour
 import com.evtrack.kioskmanager.cdn.ReleaseMeta
 import java.io.File
 
@@ -55,7 +56,11 @@ class UpdateManager(
         }
     }
 
-    /** Discover the latest release for [variant] ("latest" | "beta"). */
+    /** Discover the latest release of [flavour] on [channel] ("latest" | "beta"). */
+    suspend fun checkForUpdate(flavour: Flavour, channel: String): ReleaseMeta? =
+        cdn.fetchLatest(flavour, channel)
+
+    /** Legacy: latest release of the Normal flavour for [variant] ("latest" | "beta"). */
     suspend fun checkForUpdate(variant: String): ReleaseMeta? = cdn.fetchLatest(variant)
 
     /**
