@@ -12,6 +12,7 @@ import android.os.IBinder
 import android.util.Log
 import com.evtrack.kioskmanager.R
 import com.evtrack.kioskmanager.lockdown.LockdownManager
+import com.evtrack.kioskmanager.lockdown.LockdownState
 import com.evtrack.kioskmanager.update.UpdateManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -47,6 +48,9 @@ class InstallService : Service() {
             try {
                 val mgr = UpdateManager(applicationContext)
                 val pending = PendingInstall.load(applicationContext)
+                // A bootstrap means this device had no FrontDesk at all, so nobody has paired it
+                // with a server yet. That distinction decides whether it may be locked down below.
+                var bootstrapped = false
                 when {
                     // 1. Pinned request relayed from FrontDesk (issue #30).
                     pending != null -> {
@@ -62,7 +66,8 @@ class InstallService : Service() {
                     }
                     // 2. Fresh device: no FrontDesk yet, so bootstrap it from the CDN (issue #31).
                     !mgr.isManagedInstalled() -> {
-                        Log.i(TAG, "Managed app absent; bootstrapping latest from CDN")
+                        bootstrapped = true
+                        Log.i(TAG, "Managed app absent; bootstrapping from ARCS")
                         // At first boot the network (Ethernet/DHCP) is often not up yet, so the
                         // CDN fetch fails. Retry with a backoff until it takes or we cap out.
                         var result = mgr.bootstrapLatest()
@@ -80,11 +85,25 @@ class InstallService : Service() {
                     else -> Log.i(TAG, "No pending install and managed app present; nothing to do")
                 }
 
-                // After any install/bootstrap, ensure the kiosk lockdown is granted and
-                // the managed app is brought to the front so it can pin itself.
+                // Bring the managed app up, and decide whether it may pin itself.
+                //
+                // A freshly bootstrapped device has never been paired with a server: it comes up on
+                // the pairing screen, and whoever is standing in front of it still needs the device
+                // to be usable. Granting lock-task here pins an unpaired kiosk, which takes the
+                // tablet away from the person setting it up and leaves no way back short of adb.
+                // So on that pass the allowlist is cleared rather than granted; the grant happens on
+                // the next boot, by which time the device has been set up.
                 val lockdown = LockdownManager(applicationContext)
                 if (lockdown.isDeviceOwner() && mgr.isManagedInstalled()) {
-                    lockdown.applyAndLaunch()
+                    // A bootstrapped device has never been paired, so it cannot yet have asked for
+                    // lockdown; anything else follows whatever FrontDesk last told us.
+                    if (!bootstrapped && LockdownState.isEnabled(applicationContext)) {
+                        lockdown.applyAndLaunch()
+                    } else {
+                        Log.i(TAG, "Lockdown not enabled (bootstrapped=$bootstrapped); leaving device unlocked")
+                        lockdown.clearKioskLockdown()
+                        lockdown.launchManagedApp()
+                    }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Install processing crashed (will retry)", e)

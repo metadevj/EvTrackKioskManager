@@ -60,18 +60,34 @@
                 android:paddingBottom="4dp" />
 
             <TextView
-                android:id="@+id/txtLatest"
+                android:id="@+id/txtNormalMain"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Latest (CDN): …"
+                android:text="FrontDesk — Main (CDN): …"
                 android:textSize="16sp"
                 android:paddingBottom="4dp" />
 
             <TextView
-                android:id="@+id/txtBeta"
+                android:id="@+id/txtNormalBeta"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Beta (CDN): …"
+                android:text="FrontDesk — Beta (CDN): …"
+                android:textSize="16sp"
+                android:paddingBottom="4dp" />
+
+            <TextView
+                android:id="@+id/txtEidaMain"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="FrontDesk Eida — Main (CDN): …"
+                android:textSize="16sp"
+                android:paddingBottom="4dp" />
+
+            <TextView
+                android:id="@+id/txtEidaBeta"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="FrontDesk Eida — Beta (CDN): …"
                 android:textSize="16sp"
                 android:paddingBottom="12dp" />
 
@@ -83,16 +99,28 @@
                 android:text="Check for update" />
 
             <Button
-                android:id="@+id/btnInstallLatest"
+                android:id="@+id/btnNormalMain"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Install / Update (latest)" />
+                android:text="Install FrontDesk — Main" />
 
             <Button
-                android:id="@+id/btnInstallBeta"
+                android:id="@+id/btnNormalBeta"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Install beta" />
+                android:text="Install FrontDesk — Beta" />
+
+            <Button
+                android:id="@+id/btnEidaMain"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Install FrontDesk Eida — Main" />
+
+            <Button
+                android:id="@+id/btnEidaBeta"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Install FrontDesk Eida — Beta" />
 
             <Button
                 android:id="@+id/btnRollback"
