@@ -93,6 +93,20 @@
             </intent-filter>
         </receiver>
 
+        <!--
+          Lockdown control from FrontDesk, behind the same signature permission. FrontDesk pins on
+          "if_whitelisted", so the allowlist grant IS the lockdown: only the app that knows whether
+          the kiosk is paired and configured may ask for it.
+        -->
+        <receiver
+            android:name=".ipc.LockdownRequestReceiver"
+            android:exported="true"
+            android:permission="com.evtrack.kioskmanager.permission.INSTALL_REQUEST">
+            <intent-filter>
+                <action android:name="com.evtrack.kioskmanager.action.SET_LOCKDOWN" />
+            </intent-filter>
+        </receiver>
+
         <!-- Carries out the download + silent install in the foreground. -->
         <service
             android:name=".ipc.InstallService"

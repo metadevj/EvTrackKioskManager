@@ -99,10 +99,25 @@ class ApkDownloader {
                 }
 
                 // Success — move temp into final destination.
+                // NB: File.renameTo can return false even when the bytes DID land at dest
+                // (Android/JVM behaviour is underspecified), and in that case tmp is already
+                // gone. Only fall back to a copy if tmp is genuinely still present; otherwise
+                // trust dest. Blindly calling tmp.copyTo(dest) here threw
+                // NoSuchFileException("<tmp>.part: The source file doesn't exist") and was
+                // reported as a bogus "Download/verify failed", masking a successful download.
                 dest.delete()
                 if (!tmp.renameTo(dest)) {
-                    tmp.copyTo(dest, overwrite = true)
-                    tmp.delete()
+                    if (tmp.exists()) {
+                        tmp.copyTo(dest, overwrite = true)
+                        tmp.delete()
+                    } else if (!dest.exists()) {
+                        return@withContext Result.failure(
+                            IllegalStateException(
+                                "Move failed: neither ${tmp.name} nor ${dest.name} present after rename"
+                            )
+                        )
+                    }
+                    // else: dest is in place — the move effectively succeeded despite renameTo=false.
                 }
                 Log.i(TAG, "Downloaded ${dest.name} (${dest.length()} bytes, sha256=$actualSha)")
                 Result.success(dest)
