@@ -1,42 +1,32 @@
 package com.evtrack.kioskmanager.cdn
 
 import android.util.Log
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
+import com.evtrack.kioskmanager.cdn.arcs.ArcsCatalogueClient
+import com.evtrack.kioskmanager.cdn.arcs.ArcsCredentials
+import com.evtrack.kioskmanager.cdn.arcs.ArcsException
 
 /**
- * A flavour of the managed app as published on the CDN.
+ * A flavour of the managed app as published on ARCS.
  *
- * Normal and Eida install as the **same** package ([CdnClient.MANAGED_PACKAGE]) — they
- * differ only in the CDN folder and the artifact/pointer basename (Eida enables the
- * Emirates-ID scanning build type). Because they share a package they are mutually
- * exclusive: installing one replaces the other.
+ * Normal and Eida install as the **same** package ([CdnClient.MANAGED_PACKAGE]) - they differ only in
+ * the artefact, the Eida build enabling Emirates-ID scanning. Because they share a package they are
+ * mutually exclusive: installing one replaces the other.
+ *
+ * ARCS distinguishes them by FILENAME SUFFIX alone (`...-releaseEida.apk`); there is no field for it
+ * and `role` is `distribution` for both.
  */
-enum class Flavour(
-    val displayName: String,
-    val folder: String,
-    private val basename: String,
-) {
-    NORMAL("FrontDesk", "evtrack-front-desk", "evtrack-front-desk-universal-release"),
-    EIDA("FrontDesk Eida", "evtrack-front-desk-eida", "evtrack-front-desk-eida-universal-release");
-
-    /** Per-version pointer JSON filename for this flavour. */
-    val pointerJson get() = "$basename.json"
-
-    /** Universal release APK filename for this flavour. */
-    val apkFilename get() = "$basename.apk"
+enum class Flavour(val displayName: String, val eida: Boolean) {
+    NORMAL("FrontDesk", false),
+    EIDA("FrontDesk Eida", true),
 }
 
 /**
- * Metadata for one CDN release of the managed app.
+ * Metadata for one release of the managed app.
  *
- * @param version marketing/version string (e.g. "2.4.1")
- * @param build   build number (e.g. "531")
- * @param sha256  optional expected SHA-256 of the APK (hex); verified on download
- * @param downloadUrl fully-resolved URL of the universal release APK
+ * @param version marketing version (e.g. "2.30")
+ * @param build   build number (e.g. "5374"), which is also the Android versionCode
+ * @param sha256  expected SHA-256 of the APK, verified on download
+ * @param downloadUrl a CloudFront-signed URL, valid ~24h from when the catalogue was fetched
  */
 data class ReleaseMeta(
     val version: String,
@@ -44,53 +34,50 @@ data class ReleaseMeta(
     val sha256: String?,
     val downloadUrl: String,
 ) {
-    /** Combined "version.build" identifier, matching the CDN folder scheme. */
+    /** Combined "version.build" identifier, as ARCS names the release. */
     val versionBuild get() = "$version.$build"
 }
 
 /**
- * Discovers published builds of the managed kiosk app on the public CDN.
+ * Discovers published builds of the managed kiosk app.
  *
- * The URL scheme matches the EvTrack web updater (see the deployment app's
- * `apk-discover.js`) so all clients resolve the same artifacts.
+ * Reads the ARCS downloads catalogue rather than the old public CDN at downloads.evtrack.com, which
+ * stopped being updated when release publishing moved to ARCS and is frozen at 2.24.5366.
  *
- * CDN layout (base = [DEFAULT_BASE]) — parameterised by [Flavour] and channel:
- *   $base/<flavour.folder>/<channel>/<flavour.pointerJson>         (pointer)
- *   $base/<flavour.folder>/<version>.<build>/<flavour.apkFilename> (artifact)
- * where <channel> is "latest" (main) or "beta".
+ * One call returns the newest released build on every channel, so this resolves channels from a single
+ * cached catalogue rather than fetching a pointer per flavour and channel.
  *
- * The pointer JSON looks like:
- *   { "apps": [ { "version": "...", "build": "...", "sha256": "..." }, ... ] }
- * and we take apps[0] as the current release for that flavour + channel.
- *
- * @param base override for the CDN base URL (tests / staging). Defaults to [DEFAULT_BASE].
+ * @param arcs override for tests / staging.
  */
-class CdnClient(private val base: String = DEFAULT_BASE) {
+class CdnClient(private val arcs: ArcsCatalogueClient = ArcsCatalogueClient()) {
 
     /**
-     * Discover the latest published build of [flavour] on [channel] ("latest" | "beta"),
-     * or `null` if that flavour/channel isn't published or the fetch fails.
+     * Discover the latest published build of [flavour] on [channel], or `null` if that combination is
+     * not published or the fetch fails.
+     *
+     * [channel] keeps the caller-facing names this app has always used: "latest" for the stable
+     * channel, "beta" for beta.
      */
-    suspend fun fetchLatest(flavour: Flavour, channel: String): ReleaseMeta? = withContext(Dispatchers.IO) {
-        // Cache-buster: the pointer JSON changes in place, so defeat any CDN/proxy cache.
-        val url = "$base/${flavour.folder}/$channel/${flavour.pointerJson}?r=${System.nanoTime()}"
-        val body = httpGet(url) ?: return@withContext null
-
-        try {
-            val apps = JSONObject(body).optJSONArray("apps") ?: return@withContext null
-            if (apps.length() == 0) return@withContext null
-
-            val app = apps.getJSONObject(0)
-            val version = app.optString("version").takeIf { it.isNotEmpty() }
-                ?: return@withContext null
-            val build = app.optString("build").takeIf { it.isNotEmpty() }
-                ?: return@withContext null
-            val sha256 = app.optString("sha256").takeIf { it.isNotEmpty() }
-
-            val downloadUrl = "$base/${flavour.folder}/$version.$build/${flavour.apkFilename}"
-            ReleaseMeta(version = version, build = build, sha256 = sha256, downloadUrl = downloadUrl)
+    suspend fun fetchLatest(flavour: Flavour, channel: String): ReleaseMeta? {
+        if (!ArcsCredentials.isConfigured()) {
+            Log.e(TAG, "No ARCS licence configured - set arcs.licenseJwt in local.properties")
+            return null
+        }
+        return try {
+            val arcsChannel = arcs.channels()[arcsChannelName(channel)] ?: return null
+            val file = arcsChannel.files.firstOrNull { it.isEida == flavour.eida } ?: return null
+            val (version, build) = splitVersion(arcsChannel.version) ?: return null
+            ReleaseMeta(
+                version = version,
+                build = build,
+                sha256 = file.sha256,
+                downloadUrl = file.url,
+            )
+        } catch (e: ArcsException) {
+            Log.w(TAG, "ARCS lookup failed for ${flavour.displayName}/$channel: ${e.message}")
+            null
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to parse release pointer from $url", e)
+            Log.e(TAG, "ARCS lookup failed for ${flavour.displayName}/$channel", e)
             null
         }
     }
@@ -99,65 +86,53 @@ class CdnClient(private val base: String = DEFAULT_BASE) {
     suspend fun fetchLatest(channel: String): ReleaseMeta? = fetchLatest(Flavour.NORMAL, channel)
 
     /**
-     * Resolve a PINNED build (exact version + build) of [flavour] to a downloadable
-     * [ReleaseMeta].
+     * Resolve a PINNED build (exact version + build) of [flavour].
      *
-     * The APK URL is deterministic ($base/<folder>/<version>.<build>/<apk>), so this
-     * never needs the channel pointer. We additionally *try* the per-version pointer
-     * JSON in the same folder for an optional sha256, but its absence is fine — the
-     * install still enforces the APK signature regardless.
+     * The ARCS downloads endpoint publishes only the NEWEST released build per channel, and artefact
+     * URLs are signed per response rather than being derivable from the version. So a pinned build can
+     * only be resolved while it is still the head of a channel; anything older is no longer reachable.
+     *
+     * This is a real reduction from the old CDN, whose per-version folders made any published build
+     * addressable forever. Pinning to something other than the current head needs an ARCS endpoint
+     * that can serve a named version.
      */
-    suspend fun fetchPinned(flavour: Flavour, version: String, build: String): ReleaseMeta = withContext(Dispatchers.IO) {
-        val folder = "$version.$build"
-        val downloadUrl = "$base/${flavour.folder}/$folder/${flavour.apkFilename}"
-        val sha256 = try {
-            val body = httpGet("$base/${flavour.folder}/$folder/${flavour.pointerJson}?r=${System.nanoTime()}")
-            body?.let {
-                JSONObject(it).optJSONArray("apps")
-                    ?.optJSONObject(0)
-                    ?.optString("sha256")
-                    ?.takeIf { s -> s.isNotEmpty() }
-            }
-        } catch (e: Exception) {
-            null
+    suspend fun fetchPinned(flavour: Flavour, version: String, build: String): ReleaseMeta {
+        val wanted = "$version.$build"
+        for (channel in listOf("latest", "beta")) {
+            val meta = fetchLatest(flavour, channel) ?: continue
+            if (meta.versionBuild == wanted) return meta
         }
-        ReleaseMeta(version = version, build = build, sha256 = sha256, downloadUrl = downloadUrl)
+        throw ArcsException(
+            "ARCS cannot serve pinned build $wanted: it only publishes the newest release per " +
+                "channel, and $wanted is not the current stable or beta build."
+        )
     }
 
     /** Legacy convenience: pinned build of the [Flavour.NORMAL] flavour. */
     suspend fun fetchPinned(version: String, build: String): ReleaseMeta =
         fetchPinned(Flavour.NORMAL, version, build)
 
-    private fun httpGet(urlStr: String): String? {
-        var conn: HttpURLConnection? = null
-        return try {
-            conn = (URL(urlStr).openConnection() as HttpURLConnection).apply {
-                requestMethod = "GET"
-                connectTimeout = 15_000
-                readTimeout = 15_000
-                setRequestProperty("Accept", "application/json")
-            }
-            val code = conn.responseCode
-            if (code !in 200..299) {
-                Log.w(TAG, "GET $urlStr -> HTTP $code")
-                return null
-            }
-            conn.inputStream.bufferedReader().use { it.readText() }
-        } catch (e: Exception) {
-            Log.e(TAG, "GET $urlStr failed", e)
-            null
-        } finally {
-            conn?.disconnect()
-        }
-    }
+    /** Forces the next lookup to go to ARCS rather than the 5 minute cache. */
+    fun invalidate() = arcs.invalidate()
 
     companion object {
         private const val TAG = "CdnClient"
 
-        /** Public CDN base URL for released APKs. Overridable via the constructor. */
-        const val DEFAULT_BASE = "https://downloads.evtrack.com/public/apk"
-
         /** Package name of the app this manager installs/updates (same for every flavour). */
         const val MANAGED_PACKAGE = "com.evtrack.frontdesk"
+
+        /** This app's channel names mapped onto the ones ARCS uses. */
+        internal fun arcsChannelName(channel: String): String =
+            if (channel.equals("beta", ignoreCase = true)) "beta" else "stable"
+
+        /**
+         * ARCS names a release "2.30.5374"; this app has always carried marketing version and build
+         * number separately, the build being the Android versionCode. The build is the last component.
+         */
+        internal fun splitVersion(version: String): Pair<String, String>? {
+            val cut = version.lastIndexOf('.')
+            if (cut <= 0 || cut == version.length - 1) return null
+            return version.substring(0, cut) to version.substring(cut + 1)
+        }
     }
 }

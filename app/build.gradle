@@ -11,6 +11,25 @@ def versionFile = rootProject.file('VERSION')
 def evtrackVersionName = versionFile.exists() ? versionFile.text.trim() : '1.0.0'
 def evtrackVersionCode = evtrackVersionName.tokenize('.').last().toInteger()
 
+// ── ARCS credential ─────────────────────────────────────────────────────────
+// The fleet licence authenticates the Manager to the ARCS downloads endpoint. Put it in
+// local.properties as  arcs.licenseJwt=eyJ...  (that file is gitignored), or export
+// ARCS_LICENSE_JWT. The licence contains a private key: never commit it.
+def arcsLicenseJwt = ""
+def localProps = rootProject.file('local.properties')
+if (localProps.exists()) {
+    def props = new Properties()
+    localProps.withInputStream { props.load(it) }
+    arcsLicenseJwt = props.getProperty('arcs.licenseJwt', '')
+}
+if (!arcsLicenseJwt) {
+    arcsLicenseJwt = System.getenv('ARCS_LICENSE_JWT') ?: ''
+}
+if (!arcsLicenseJwt) {
+    logger.warn('ARCS licence not configured: set arcs.licenseJwt in local.properties. ' +
+            'Update checks will report the app as unconfigured.')
+}
+
 android {
     namespace 'com.evtrack.kioskmanager'
     compileSdk 34
@@ -21,6 +40,15 @@ android {
         targetSdk 34
         versionCode evtrackVersionCode
         versionName evtrackVersionName
+
+        // ARCS fleet licence, read from local.properties (gitignored) or the environment.
+        // It carries a private key in its spr claim, so it is deliberately NOT held in source.
+        // Absent, the app builds and runs but every update check reports that it is unconfigured.
+        buildConfigField "String", "ARCS_LICENSE_JWT", "\"${arcsLicenseJwt}\""
+    }
+
+    buildFeatures {
+        buildConfig true
     }
 
     // Release signing via environment variables (see build.sh / release/keys.sh).

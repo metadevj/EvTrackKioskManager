@@ -10,6 +10,7 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.evtrack.kioskmanager.cdn.Flavour
+import com.evtrack.kioskmanager.cdn.arcs.ArcsCredentials
 import com.evtrack.kioskmanager.cdn.ReleaseMeta
 import com.evtrack.kioskmanager.update.UpdateManager
 import kotlinx.coroutines.CancellationException
@@ -20,7 +21,7 @@ import kotlinx.coroutines.launch
 /**
  * Simple manual control surface for the kiosk manager (v1).
  *
- * Shows Device Owner status, the installed managed-app version, and the CDN version of
+ * Shows Device Owner status, the installed managed-app version, and the ARCS version of
  * every installable option — both channels (Main = "latest", Beta) for both flavours
  * (Normal + Eida). Each option has its own install button; they all install the same
  * package ([UpdateManager.managedPackage]) and are therefore mutually exclusive.
@@ -95,7 +96,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Populate every option's CDN version on launch (without the busy/disable UI) so the
+     * Populate every option's ARCS version on launch (without the busy/disable UI) so the
      * rows don't sit on "…". Retries for a while because at first boot the network may
      * not be up yet.
      */
@@ -109,7 +110,7 @@ class MainActivity : AppCompatActivity() {
                     if (meta != null) anyResolved = true
                 }
                 if (anyResolved) return@launch
-                for (opt in options) versionView(opt).text = "${opt.label} (CDN): checking…"
+                for (opt in options) versionView(opt).text = "${opt.label} (ARCS): checking…"
                 delay(3000)
             }
         }
@@ -146,7 +147,7 @@ class MainActivity : AppCompatActivity() {
     private fun versionView(opt: InstallOption): TextView = findViewById(opt.versionViewId)
 
     private fun setOptionVersion(opt: InstallOption, meta: ReleaseMeta?) {
-        versionView(opt).text = "${opt.label} (CDN): " + (meta?.versionBuild ?: "unavailable")
+        versionView(opt).text = "${opt.label} (ARCS): " + (meta?.versionBuild ?: "unavailable")
     }
 
     private fun setStatus(text: String) {
@@ -173,10 +174,16 @@ class MainActivity : AppCompatActivity() {
         currentJob?.cancel()
     }
 
-    /** Check every option on the CDN and display the resolved versions. */
+    /** Check every option on ARCS and display the resolved versions. */
     private fun onCheck() {
+        if (!ArcsCredentials.isConfigured()) {
+            // Without this the screen just reads "unavailable" against every option, which looks
+            // like an outage rather than a build that was never given a credential.
+            setStatus("No ARCS licence in this build - set arcs.licenseJwt in local.properties.")
+            return
+        }
         setBusy(true)
-        setStatus("Checking CDN…")
+        setStatus("Checking ARCS…")
         currentJob = lifecycleScope.launch {
             try {
                 for (opt in options) setOptionVersion(opt, safeCheck(opt))
@@ -209,11 +216,16 @@ class MainActivity : AppCompatActivity() {
             try {
                 val meta = safeCheck(opt)
                 if (meta == null) {
-                    setStatus("No ${opt.label} release found on CDN.")
+                    setStatus("No ${opt.label} release found on ARCS.")
                     return@launch
                 }
                 val result = updateManager.updateTo(meta) { read, total ->
                     runOnUiThread { onDownloadProgress(meta.versionBuild, read, total) }
+                }
+                if (result.success) {
+                    // Deliberate choice of channel, so a later bootstrap restores this one rather
+                    // than dropping the device back to stable.
+                    updateManager.rememberChannel(opt.channel)
                 }
                 setStatus(result.message)
                 refreshStatus()
