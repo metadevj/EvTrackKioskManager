@@ -66,14 +66,58 @@ class UpdateManager(
     /**
      * BOOTSTRAP first-install (issue #31). On a fresh OS image the managed app isn't
      * installed yet, so there is no FrontDesk to send a pinned trigger. The Manager
-     * ships with the OS and pulls the [variant] ("latest" by default) from the CDN
-     * itself. Reuses the same download → verify → install flow.
+     * ships with the OS and pulls the release itself. Reuses the same download →
+     * verify → install flow.
+     *
+     * Defaults to the channel this device was last installed from rather than always
+     * stable: a fleet running beta that loses its FrontDesk should come back on beta,
+     * not be quietly moved to a different channel.
      */
-    suspend fun bootstrapLatest(variant: String = DEFAULT_BOOTSTRAP_VARIANT): UpdateResult {
+    suspend fun bootstrapLatest(variant: String = preferredChannel()): UpdateResult {
         val meta = cdn.fetchLatest(variant)
-            ?: return UpdateResult(false, "Bootstrap: CDN pointer unavailable for '$variant'")
-        Log.i(TAG, "Bootstrap install of ${meta.versionBuild} ($variant); managed app not installed")
+            ?: return UpdateResult(false, "Bootstrap: ARCS has no released build for '$variant'")
+
+        // Never let an automatic bootstrap move the device backwards. This path runs whenever
+        // the managed app looks absent, and a false negative here once replaced a newer beta
+        // with stable - losing the build the device was deliberately put on.
+        val installed = installedBuild()
+        val candidate = meta.build.toLongOrNull()
+        if (installed != null && candidate != null && candidate < installed) {
+            val message = "Bootstrap skipped: ${meta.versionBuild} on '$variant' is older than the " +
+                "installed build ($installed)"
+            Log.w(TAG, message)
+            return UpdateResult(false, message)
+        }
+
+        Log.i(TAG, "Bootstrap install of ${meta.versionBuild} ($variant); installed build=$installed")
         return updateTo(meta)
+    }
+
+    /** The managed app's installed versionCode, or null when it is not installed. */
+    fun installedBuild(pkg: String = managedPackage): Long? = try {
+        val info = context.packageManager.getPackageInfo(pkg, 0)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            info.longVersionCode
+        } else {
+            @Suppress("DEPRECATION") info.versionCode.toLong()
+        }
+    } catch (e: PackageManager.NameNotFoundException) {
+        null
+    }
+
+    /** The channel this device was last deliberately installed from. */
+    fun preferredChannel(): String =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(KEY_CHANNEL, DEFAULT_BOOTSTRAP_VARIANT) ?: DEFAULT_BOOTSTRAP_VARIANT
+
+    /**
+     * Records the channel an install was deliberately made from, so a later bootstrap puts the
+     * device back on the same one. Only call this for a chosen install, never for a bootstrap.
+     */
+    fun rememberChannel(channel: String) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putString(KEY_CHANNEL, channel).apply()
+        Log.i(TAG, "Channel preference set to '$channel'")
     }
 
     /** True if the managed app is currently installed. */
@@ -87,7 +131,14 @@ class UpdateManager(
      * treats a reinstall of the same build as a benign no-op).
      */
     suspend fun updateToPinned(version: String, build: String): UpdateResult {
-        val meta = cdn.fetchPinned(version, build)
+        // ARCS publishes only the head of each channel, so a pin can go unresolvable as soon as a
+        // newer build ships. That is a refusal to report, not an exception to throw at the UI.
+        val meta = try {
+            cdn.fetchPinned(version, build)
+        } catch (e: Exception) {
+            Log.w(TAG, "Pinned install of $version.$build could not be resolved", e)
+            return UpdateResult(false, e.message ?: "Could not resolve pinned build $version.$build")
+        }
         Log.i(TAG, "Pinned install requested: ${meta.versionBuild} (installed=${installedVersion()})")
         return updateTo(meta)
     }
@@ -187,7 +238,10 @@ class UpdateManager(
     companion object {
         private const val TAG = "UpdateManager"
 
-        /** CDN variant the Manager bootstraps on a fresh device. */
+        /** Channel the Manager bootstraps on a device that has never had one chosen. */
         const val DEFAULT_BOOTSTRAP_VARIANT = "latest"
+
+        private const val PREFS = "kiosk_manager"
+        private const val KEY_CHANNEL = "channel"
     }
 }

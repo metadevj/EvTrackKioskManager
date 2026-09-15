@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.util.Log
 import com.evtrack.kioskmanager.cdn.CdnClient
 import com.evtrack.kioskmanager.lockdown.LockdownManager
+import com.evtrack.kioskmanager.lockdown.LockdownState
 
 /**
  * Runs on boot to kick [InstallService] when there's work:
@@ -27,10 +28,19 @@ class BootReceiver : BroadcastReceiver() {
             // Install / bootstrap first; InstallService applies the lockdown afterwards.
             Log.i(TAG, "Boot: hasPending=$hasPending installed=$installed → starting InstallService")
             InstallService.start(context)
-        } else {
-            // Managed app already present: just re-apply the kiosk lockdown and bring it up.
+        } else if (LockdownState.isEnabled(context)) {
+            // Managed app already present and this device is meant to be locked down.
             Log.i(TAG, "Boot: managed app present → applying kiosk lockdown")
             LockdownManager(context).applyAndLaunch()
+        } else {
+            // Not locked down. The allowlist is cleared rather than merely not granted, because
+            // FrontDesk pins on "if_whitelisted": a stale grant left from an earlier configuration
+            // would silently re-pin the device on every boot.
+            Log.i(TAG, "Boot: lockdown not enabled → launching managed app unlocked")
+            LockdownManager(context).apply {
+                clearKioskLockdown()
+                launchManagedApp()
+            }
         }
     }
 
