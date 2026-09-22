@@ -63,10 +63,36 @@ state). Install the APK, then:
 adb shell dpm set-device-owner com.evtrack.kioskmanager/.AdminReceiver
 ```
 
-To clear (for testing): `adb shell dpm remove-active-admin com.evtrack.kioskmanager/.AdminReceiver`.
-
 On the shipped kiosk fleet this will also be **baked into the OS image and
 auto-provisioned** (EvTrackOS issue #27), so the adb step is for dev/manual bring-up.
+
+### Know what this commits you to
+
+Setting Device Owner is close to one-way. **`adb shell dpm remove-active-admin` does not
+undo it** - it refuses anything that is not a test-only build:
+
+```
+SecurityException: Attempt to remove non-test admin ComponentInfo{...AdminReceiver}
+```
+
+Android allows exactly two ways out: the owning app gives it up, or the device is factory
+reset. It is also immediate: becoming Device Owner makes the Manager bootstrap FrontDesk
+and, before 1.1.4, lock the device down. Do not set it on a tablet you still need under
+manual control.
+
+### Releasing it
+
+```
+./scripts/release-device-owner.sh            # the only attached device
+./scripts/release-device-owner.sh <serial>   # a specific one
+```
+
+The script checks the state, opens the Manager, waits while you tap **Release Device
+Owner** on the tablet, verifies it worked and then uninstalls the Manager. The tap is
+deliberately left to a person: anything that could clear Device Owner without one would be
+a way for any app on the kiosk to unlock it.
+
+The same button is there without the script, at the bottom of the Manager's screen.
 
 ## Source map → GitHub issues
 

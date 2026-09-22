@@ -128,6 +128,16 @@
                 android:layout_height="wrap_content"
                 android:text="Rollback (last known good)" />
 
+            <!--
+              Maintenance only. Device Owner cannot be undone over adb, so without this a tablet
+              can only be freed by a factory reset. Confirmed before it acts.
+            -->
+            <Button
+                android:id="@+id/btnReleaseOwner"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/release_device_owner" />
+
             <ProgressBar
                 android:id="@+id/progressDownload"
                 style="?android:attr/progressBarStyleHorizontal"

@@ -1,5 +1,6 @@
 package com.evtrack.kioskmanager
 
+import android.app.AlertDialog
 import android.app.admin.DevicePolicyManager
 import android.content.Context
 import android.os.Bundle
@@ -10,6 +11,7 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.evtrack.kioskmanager.cdn.Flavour
+import com.evtrack.kioskmanager.lockdown.LockdownManager
 import com.evtrack.kioskmanager.cdn.arcs.ArcsCredentials
 import com.evtrack.kioskmanager.cdn.ReleaseMeta
 import com.evtrack.kioskmanager.update.UpdateManager
@@ -40,6 +42,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var progressDownload: ProgressBar
     private lateinit var btnCheck: Button
     private lateinit var btnRollback: Button
+    private lateinit var btnReleaseOwner: Button
     private lateinit var btnCancel: Button
 
     /** One installable {flavour × channel} choice, bound to a version row + install button. */
@@ -79,6 +82,7 @@ class MainActivity : AppCompatActivity() {
         progressDownload = findViewById(R.id.progressDownload)
         btnCheck = findViewById(R.id.btnCheck)
         btnRollback = findViewById(R.id.btnRollback)
+        btnReleaseOwner = findViewById(R.id.btnReleaseOwner)
         btnCancel = findViewById(R.id.btnCancel)
 
         for (opt in options) {
@@ -89,6 +93,7 @@ class MainActivity : AppCompatActivity() {
 
         btnCheck.setOnClickListener { onCheck() }
         btnRollback.setOnClickListener { onRollback() }
+        btnReleaseOwner.setOnClickListener { onReleaseDeviceOwner() }
         btnCancel.setOnClickListener { onCancel() }
 
         refreshStatus()
@@ -154,10 +159,41 @@ class MainActivity : AppCompatActivity() {
         txtStatus.text = text
     }
 
+    /**
+     * Hand back Device Owner.
+     *
+     * The only other way out is a factory reset: adb cannot remove a non-test admin. That makes
+     * this destructive in one direction only, so it asks first, and says plainly what is lost.
+     */
+    private fun onReleaseDeviceOwner() {
+        val lockdown = LockdownManager(this)
+        if (!lockdown.isDeviceOwner()) {
+            setStatus(getString(R.string.release_device_owner_not_owner))
+            return
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.release_device_owner_title)
+            .setMessage(R.string.release_device_owner_message)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.release_device_owner_confirm) { _, _ ->
+                val released = lockdown.releaseDeviceOwner()
+                setStatus(
+                    getString(
+                        if (released) R.string.release_device_owner_done
+                        else R.string.release_device_owner_failed
+                    )
+                )
+                refreshStatus()
+            }
+            .show()
+    }
+
     /** Enable/disable action buttons and show/hide the progress bar for a running op. */
     private fun setBusy(busy: Boolean) {
         btnCheck.isEnabled = !busy
         btnRollback.isEnabled = !busy
+        btnReleaseOwner.isEnabled = !busy
         for (b in optionButtons) b.isEnabled = !busy
         btnCancel.visibility = if (busy) View.VISIBLE else View.GONE
         if (busy) {
