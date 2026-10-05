@@ -117,6 +117,20 @@ version/build come from `VERSION` (1.0.2 → version `1.0`, build `2`). Upload i
 with an `[evtrack-downloads]` R2 remote — copy `S3/rclone.conf.example` and fill
 in the Cloudflare R2 credentials (the real config is gitignored).
 
+## Publishing to ARCS
+
+The same signed APK is also registered in ARCS, which is where kiosks look for Kiosk Manager
+updates. Run it after `publish-cdn.sh`:
+
+```bash
+EVTRACK_RELEASES_AWS_PROFILE=evtrack-jan scripts/publish-release.sh             # upload + register
+EVTRACK_RELEASES_AWS_PROFILE=evtrack-jan scripts/publish-release.sh --dry-run   # show the plan only
+```
+
+A new release lands on **BETA**. Kiosks only self-update from **STABLE**, so nothing rolls out until
+an ARCS admin promotes the release (Admin > Releases). Full details, including the self-update
+contract: [docs/ARCS-RELEASES.md](docs/ARCS-RELEASES.md).
+
 ## Quick reference
 
 | Task | Command |
