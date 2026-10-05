@@ -62,6 +62,37 @@ class LockdownManager(private val context: Context) {
         launchManagedApp()
     }
 
+    /**
+     * Give up Device Owner.
+     *
+     * Android offers exactly two ways out of Device Owner: the owning app relinquishes it, or the
+     * device is factory reset. `adb shell dpm remove-active-admin` is not one of them - it refuses
+     * anything that is not a test-only build, with "Attempt to remove non-test admin". Without this
+     * method a tablet provisioned for a trial could never be handed back or repurposed without a
+     * wipe, which is how the first bench unit ended up stuck.
+     *
+     * Clears the lock-task allowlist first, so the managed app cannot be left pinned by a policy
+     * nothing owns any more.
+     *
+     * @return true when the device is no longer owned.
+     */
+    fun releaseDeviceOwner(): Boolean {
+        if (!isDeviceOwner()) {
+            Log.i(TAG, "Not Device Owner; nothing to release")
+            return true
+        }
+        return try {
+            clearKioskLockdown()
+            dpm.clearDeviceOwnerApp(context.packageName)
+            val stillOwner = isDeviceOwner()
+            Log.i(TAG, "Released Device Owner; stillOwner=$stillOwner")
+            !stillOwner
+        } catch (e: Exception) {
+            Log.e(TAG, "Could not release Device Owner", e)
+            false
+        }
+    }
+
     /** Remove the lock-task allowlist (maintenance). Device-Owner only. */
     fun clearKioskLockdown() {
         if (!isDeviceOwner()) return

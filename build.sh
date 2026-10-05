@@ -11,18 +11,22 @@
 #   ./build.sh                 # build signed release APK
 #   ./build.sh --clean         # clean first
 #
-# The four signing vars are exported by the shared keys.sh:
-#   EVTRACK_KEYSTORE_FILE  EVTRACK_KEYSTORE_PASSWORD
-#   EVTRACK_KEY_ALIAS      EVTRACK_KEY_PASSWORD
+# The four signing vars come from AWS Secrets Manager, fetched per build:
+#   eval "$(./scripts/fetch-signing-env.sh)"
+#   ./build.sh --clean
+#   ./scripts/fetch-signing-env.sh --clean      # wipe the credentials again
+# They are EVTRACK_KEYSTORE_FILE / _PASSWORD and EVTRACK_KEY_ALIAS / _PASSWORD.
 # =============================================================================
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Legacy path: the shared keys.sh file. Signing now comes from AWS Secrets
+# Manager via scripts/fetch-signing-env.sh, but keep honouring keys.sh if a
+# machine still has one.
 KEYS_SH="${EVTRACK_KEYS_SH:-/home/janz/data/development/evtrack/release/keys.sh}"
 
-# Source the shared signing env if the vars aren't already exported.
 if [ -z "$EVTRACK_KEYSTORE_FILE" ] && [ -f "$KEYS_SH" ]; then
     echo "Sourcing signing keys from $KEYS_SH"
     # shellcheck disable=SC1090
@@ -48,7 +52,8 @@ echo "========================================"
 if [ -z "$EVTRACK_KEYSTORE_FILE" ] || [ -z "$EVTRACK_KEYSTORE_PASSWORD" ] || \
    [ -z "$EVTRACK_KEY_ALIAS" ] || [ -z "$EVTRACK_KEY_PASSWORD" ]; then
     echo "Warning: signing env vars not set (EVTRACK_KEYSTORE_FILE/PASSWORD, EVTRACK_KEY_ALIAS/PASSWORD)."
-    echo "         Set EVTRACK_KEYS_SH or source keys.sh first. The release APK will be UNSIGNED."
+    echo "         Fetch them first:  eval \"\$(./scripts/fetch-signing-env.sh)\""
+    echo "         The release APK will be UNSIGNED - say no unless you know why."
     read -r -p "Continue without signing? [y/N] " response
     [[ "$response" =~ ^[Yy]$ ]] || exit 1
 fi
