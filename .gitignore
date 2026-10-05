@@ -19,3 +19,6 @@ keystore.properties
 
 # rclone / R2 credentials (real config; template is committed)
 /S3/rclone.conf
+
+# Local build environment overrides
+.env

@@ -22,6 +22,27 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Load local environment overrides (e.g. JAVA_HOME) if present
+if [ -f "$SCRIPT_DIR/.env" ]; then
+    set -a
+    # shellcheck disable=SC1091
+    source "$SCRIPT_DIR/.env"
+    set +a
+fi
+
+# The build requires a JDK with a compiler (JDK 17). The machine default java-21
+# is JRE-only and Gradle fails with "does not provide the required capabilities:
+# [JAVA_COMPILER]". Fall back to the standard JDK 17 path when available.
+if [ -z "${JAVA_HOME:-}" ] && [ -d /usr/lib/jvm/java-17-openjdk-amd64 ]; then
+    export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+fi
+
+# Force Gradle to use JAVA_HOME so it cannot auto-select a JRE-only toolchain.
+GRADLE_JDK_ARG=""
+if [ -n "${JAVA_HOME:-}" ]; then
+    GRADLE_JDK_ARG="-Dorg.gradle.java.home=$JAVA_HOME"
+fi
+
 # Legacy path: the shared keys.sh file. Signing now comes from AWS Secrets
 # Manager via scripts/fetch-signing-env.sh, but keep honouring keys.sh if a
 # machine still has one.
@@ -58,7 +79,7 @@ if [ -z "$EVTRACK_KEYSTORE_FILE" ] || [ -z "$EVTRACK_KEYSTORE_PASSWORD" ] || \
     [[ "$response" =~ ^[Yy]$ ]] || exit 1
 fi
 
-./gradlew $CLEAN assembleRelease
+./gradlew $GRADLE_JDK_ARG $CLEAN assembleRelease
 
 # Stage the built APK under the EvTrack naming convention
 # (<app-slug>-universal-release.apk) so downstream — the OS image embed, the
