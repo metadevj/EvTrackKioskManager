@@ -15,6 +15,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CALLER_DIR="$PWD"
 cd "$SCRIPT_DIR/.."
 
 PRODUCT="evtrack-kiosk-manager"
@@ -30,6 +31,8 @@ for a in "$@"; do case "$a" in
   -*) echo "ERROR: unknown option $a" >&2; exit 1 ;;
   *) APK="$a" ;;
 esac; done
+# A path given on the command line is relative to where the caller ran the script.
+case "$APK" in ""|/*) ;; *) APK="$CALLER_DIR/$APK" ;; esac
 if [ -z "$APK" ]; then
   for candidate in dist/evtrack-kiosk-manager-universal-release.apk \
                    app/build/outputs/apk/release/app-release.apk; do
@@ -48,8 +51,21 @@ VERSION="${EVTRACK_RELEASES_VERSION:-$(tr -d '[:space:]' < VERSION)}"
 # so an unsigned or debug-signed build promoted to STABLE would strand the fleet. Check here.
 command -v apksigner >/dev/null \
   || { echo "ERROR: apksigner not on PATH (Android build-tools) - needed to verify the signature" >&2; exit 1; }
-apksigner verify "$APK" >/dev/null 2>&1 \
+SIGNERS="$(apksigner verify --print-certs "$APK" 2>/dev/null)" \
   || { echo "ERROR: $APK failed 'apksigner verify' - is it a signed release build?" >&2; exit 1; }
+# apksigner accepts any valid signature, including the debug key; kiosks would reject that update.
+if grep -qi 'CN=Android Debug' <<<"$SIGNERS"; then
+  echo "ERROR: $APK is signed with the Android debug certificate - publish a release build" >&2; exit 1
+fi
+
+# The APK's own versionName must match the version being published, or a stale build left in
+# dist/ would ship under a new number and kiosks would reinstall it on every check.
+command -v aapt2 >/dev/null \
+  || { echo "ERROR: aapt2 not on PATH (Android build-tools) - needed to read the APK version" >&2; exit 1; }
+APK_VERSION="$(aapt2 dump badging "$APK" 2>/dev/null | sed -n "s/.*versionName='\([^']*\)'.*/\1/p" | head -1)" || true
+if [ "$APK_VERSION" != "$VERSION" ]; then
+  echo "ERROR: APK versionName '$APK_VERSION' does not match version '$VERSION' - rebuild, or check VERSION" >&2; exit 1
+fi
 
 STAGE_DIR="dist/arcs/$VERSION"
 rm -rf "$STAGE_DIR"; mkdir -p "$STAGE_DIR"
@@ -96,11 +112,11 @@ build_manifest() {
 }
 
 precheck_and_upload() {
-  local remote_file remote_manifest name ct sha manifest_file
-  remote_file="$(mktemp)"
+  local remote_file err_file remote_manifest name ct sha manifest_file
+  remote_file="$(mktemp)"; err_file="$(mktemp)"
   if aws s3api get-object --bucket "$BUCKET" --key "$KEY_BASE/manifest.json" \
-      --profile "$PROFILE" "$remote_file" >/dev/null 2>&1; then
-    remote_manifest=$(cat "$remote_file"); rm -f "$remote_file"
+      --profile "$PROFILE" "$remote_file" >/dev/null 2>"$err_file"; then
+    remote_manifest=$(cat "$remote_file"); rm -f "$remote_file" "$err_file"
     if [ "$(jq -S .files <<<"$remote_manifest")" = "$(jq -S .files <<<"$MANIFEST")" ]; then
       echo "Version $PRODUCT/$VERSION already published with identical content - resuming."
       return 0
@@ -109,7 +125,16 @@ precheck_and_upload() {
     echo "Versions are immutable - bump the version and publish again." >&2
     exit 1
   fi
-  rm -f "$remote_file"
+  # Only a definite "no such key" means the version is new. Anything else (network, throttling,
+  # wrong profile) must stop here: falling through would upload over a published version.
+  if ! grep -qE 'NoSuchKey|\(404\)|Not Found' "$err_file"; then
+    echo "ERROR: could not check whether $PRODUCT/$VERSION is already published:" >&2
+    cat "$err_file" >&2
+    rm -f "$remote_file" "$err_file"
+    echo "Nothing was uploaded. Fix the problem above and re-run." >&2
+    exit 1
+  fi
+  rm -f "$remote_file" "$err_file"
   # Files first, manifest LAST: a manifest-less prefix is an ignorable partial; re-runs resume it.
   while IFS= read -r name; do
     ct=$(jq -r --arg n "$name" '.files[] | select(.name==$n) | .contentType' <<<"$MANIFEST")

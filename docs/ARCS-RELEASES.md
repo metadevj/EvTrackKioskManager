@@ -16,7 +16,7 @@ Design: EvTrackARCS `docs/superpowers/specs/2026-10-05-kiosk-manager-os-releases
    aws configure --profile evtrack-jan     # region eu-central-1
    aws sts get-caller-identity --profile evtrack-jan
    ```
-3. Tools on PATH: `aws` (v2), `jq`, `curl`, `apksigner` (Android build-tools).
+3. Tools on PATH: `aws` (v2), `jq`, `curl`, and from Android build-tools `apksigner` and `aapt2`.
 
 ## Publishing a release
 
@@ -27,7 +27,8 @@ Design: EvTrackARCS `docs/superpowers/specs/2026-10-05-kiosk-manager-os-releases
 EVTRACK_RELEASES_AWS_PROFILE=evtrack-jan scripts/publish-release.sh
 ```
 
-What it does: verifies the APK signature, stages it as
+What it does: verifies the APK signature (and refuses the Android debug certificate), checks the
+APK's own versionName equals VERSION, stages it as
 `evtrack-kiosk-manager-<VERSION>-release.apk`, uploads it to
 `releases/evtrack-kiosk-manager/<VERSION>/` with `manifest.json` last, checks size and sha256 in
 S3, then registers the manifest with ARCS.
@@ -38,6 +39,11 @@ Rules:
 - **Every release lands on BETA.** Promote to STABLE in ARCS (Admin > Releases) to roll it out to
   kiosks. Withdrawing a release in ARCS removes it from the catalogue.
 - `--dry-run` shows the manifest and the upload plan without touching AWS.
+- A path you pass (`scripts/publish-release.sh path/to/app.apk`) is relative to your current
+  directory. For an older build (e.g. the 1.1.4 backfill) set `EVTRACK_RELEASES_VERSION=1.1.4`; the
+  APK's versionName must still match it.
+- If the "already published?" check against S3 fails for any reason other than "not found", the
+  script stops before uploading anything. Fix the problem (network, profile) and re-run.
 - If registration fails after upload, just re-run: the upload resumes as identical and only the
   registration is retried.
 

@@ -18,13 +18,20 @@ setup() {
   git add -A && git commit -qm init && git tag v1.1.5
   cat > "$WORK/bin/apksigner" <<'EOF'
 #!/bin/bash
+echo "Signer #1 certificate DN: ${STUB_CERT_DN:-CN=EvTrack Release, O=EvTrack}"
 exit "${STUB_APKSIGNER_RC:-0}"
+EOF
+  cat > "$WORK/bin/aapt2" <<'EOF'
+#!/bin/bash
+echo "package: name='com.evtrack.kioskmanager' versionCode='5' versionName='${STUB_APK_VERSION:-1.1.5}'"
 EOF
   cat > "$WORK/bin/aws" <<'EOF'
 #!/bin/bash
 echo "aws $*" >> "$STUB_LOG"
 if [ "$1 $2" = "s3api get-object" ]; then
   if [ -n "${STUB_REMOTE_MANIFEST:-}" ]; then cp "$STUB_REMOTE_MANIFEST" "${@: -1}"; exit 0; fi
+  if [ -n "${STUB_GET_ERROR:-}" ]; then echo "$STUB_GET_ERROR" >&2; exit 255; fi
+  echo "An error occurred (NoSuchKey) when calling the GetObject operation: The specified key does not exist." >&2
   exit 254
 fi
 exit 0
@@ -36,7 +43,7 @@ EOF
   chmod +x "$WORK/bin/"*
   export PATH="$WORK/bin:$PATH" STUB_LOG="$WORK/stub.log"
   : > "$STUB_LOG"
-  unset STUB_APKSIGNER_RC STUB_REMOTE_MANIFEST EVTRACK_RELEASES_VERSION
+  unset STUB_APKSIGNER_RC STUB_REMOTE_MANIFEST EVTRACK_RELEASES_VERSION STUB_CERT_DN STUB_APK_VERSION STUB_GET_ERROR
 }
 
 check() { # check <name> <condition-exit-code>
@@ -87,6 +94,33 @@ rm dist/evtrack-kiosk-manager-universal-release.apk
 out=$(scripts/publish-release.sh --dry-run 2>&1); rc=$?
 [ $rc -ne 0 ] && grep -q "APK not found" <<<"$out"
 check "missing APK aborts with a clear message" $?
+
+
+# 6. debug-signed APK aborts (apksigner verify alone accepts the debug key)
+setup
+out=$(STUB_CERT_DN="CN=Android Debug, O=Android, C=US" scripts/publish-release.sh --dry-run 2>&1); rc=$?
+[ $rc -ne 0 ] && grep -q "Android debug certificate" <<<"$out" && [ ! -d dist/arcs ]
+check "debug-signed APK aborts" $?
+
+# 7. APK versionName must match the version (a stale dist/ APK must not ship as a new version)
+setup
+out=$(STUB_APK_VERSION=1.1.4 scripts/publish-release.sh --dry-run 2>&1); rc=$?
+[ $rc -ne 0 ] && grep -q "versionName '1.1.4' does not match version '1.1.5'" <<<"$out" && [ ! -d dist/arcs ]
+check "APK versionName mismatch aborts" $?
+
+# 8. a failed existence check (network, throttling, wrong profile) aborts instead of uploading
+setup
+out=$(STUB_GET_ERROR="An error occurred (RequestTimeout) when calling the GetObject operation" \
+  ARCS_ADMIN_API_TOKEN=x scripts/publish-release.sh 2>&1); rc=$?
+[ $rc -ne 0 ] && grep -q "could not check whether" <<<"$out" && ! grep -q "aws s3 cp" "$STUB_LOG"
+check "failed existence check aborts before any upload" $?
+
+# 9. a relative APK path resolves against the caller's directory, not the repo root
+setup
+mkdir -p "$WORK/elsewhere" && cp dist/evtrack-kiosk-manager-universal-release.apk "$WORK/elsewhere/my.apk"
+out=$(cd "$WORK/elsewhere" && "$WORK/repo/scripts/publish-release.sh" my.apk --dry-run 2>&1); rc=$?
+[ $rc -eq 0 ] && [ "$(grep '^{' <<<"$out" | jq -r '.files[0].sha256')" = "$(sha256sum "$WORK/elsewhere/my.apk" | cut -d' ' -f1)" ]
+check "relative APK path resolves from the caller's directory" $?
 
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]
