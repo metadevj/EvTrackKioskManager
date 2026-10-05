@@ -5,6 +5,24 @@ This file is the source for GitHub release notes when publishing a release.
 
 ---
 
+## [1.2.5] - 2026-10-05
+
+### Added
+- The Manager can hand Device Owner back, with a script to drive it.
+- Releases are published to ARCS and registered there, so a new Kiosk Manager
+  no longer needs a new OS image once self-update ships.
+
+### Changed
+- Signing material is fetched from AWS Secrets Manager per build
+  (`scripts/fetch-signing-env.sh`) instead of a local `keys.sh`, which no
+  longer exists on the build machine.
+- `build.sh` pins JDK 17; the machine default java-21 is JRE-only and fails
+  the build.
+
+### Fixed
+- The publish script refuses debug-signed APKs and ones whose versionName
+  does not match `VERSION`, and never uploads after a failed existence check.
+
 ## [1.1.4] - 2026-09-15
 
 ### Added
