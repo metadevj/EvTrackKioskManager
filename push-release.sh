@@ -111,8 +111,10 @@ for i in $(seq 1 30); do
         echo "Done! Uploaded $APK_ASSET to release $TAG"
         echo "  Permalink: https://github.com/metadevj/EvTrackKioskManager/releases/latest/download/$APK_ASSET"
         echo ""
-        echo "Next: publish the same APK to the CDN (downloads.evtrack.com):"
+        echo "Next: publish the same APK to the CDN (downloads.evtrack.com, used by QR provisioning):"
         echo "  ./publish-cdn.sh"
+        echo "and register it with ARCS (lands on BETA; promote to STABLE in ARCS to roll out):"
+        echo "  scripts/publish-release.sh"
         gh release view "$TAG" --web 2>/dev/null || true
         exit 0
     fi
