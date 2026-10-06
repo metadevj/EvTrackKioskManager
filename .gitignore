@@ -22,3 +22,7 @@ keystore.properties
 
 # Local build environment overrides
 .env
+
+# Claude Code local context (memory, plans, working notes) - never shared.
+# Shared, reviewable skills live in claude/ (tracked).
+/.claude/
