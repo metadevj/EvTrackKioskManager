@@ -72,7 +72,10 @@ rm -rf "$STAGE_DIR"; mkdir -p "$STAGE_DIR"
 cp -f "$APK" "$STAGE_DIR/$PRODUCT-$VERSION-release.apk"
 KEY_BASE="$PREFIX/$PRODUCT/$VERSION"
 
-TAG="v$VERSION"
+# Mirrors release.sh: a beta release is tagged v<VERSION>-beta.
+BRANCH="$(git branch --show-current 2>/dev/null || echo)"
+if [ "$BRANCH" = "master" ] || [ -z "$BRANCH" ]; then TAG="v$VERSION"; else TAG="v$VERSION-$BRANCH"; fi
+git rev-parse "$TAG" >/dev/null 2>&1 || TAG="v$VERSION"
 BUILD_TIME="${EVTRACK_RELEASES_BUILDTIME:-$(git log -1 --format=%cI "$TAG" 2>/dev/null || date -u -r "$APK" +%FT%TZ)}"
 SRC_REPO="EvTrackKioskManager"
 SRC_COMMIT="$(git rev-parse "$TAG^{commit}" 2>/dev/null || git rev-parse HEAD 2>/dev/null || echo unknown)"

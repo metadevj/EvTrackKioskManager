@@ -29,7 +29,6 @@ cd "$SCRIPT_DIR"
 
 VERSION=$(cat VERSION | tr -d '[:space:]')
 BRANCH=$(git branch --show-current)
-TAG="v${VERSION}"
 DATE=$(date +%Y-%m-%d)
 RELEASE_FILE="RELEASE.md"
 DRY_RUN=false
@@ -40,12 +39,20 @@ fi
 
 # ── Checks ──────────────────────────────────────────────────────────────────
 
-# Releases are cut from master only (production). We develop on dev.
-if [ "$BRANCH" != "master" ]; then
-    echo "Error: releases must be cut from master (production), not '$BRANCH'."
-    echo "  Promote your changes first:  git checkout master && git merge dev"
+# Releases come from beta (bench/ARCS beta channel) or master (production). Work happens on dev and
+# feature branches, which are landed on beta first - see WORKFLOW.md.
+if [ "$BRANCH" != "master" ] && [ "$BRANCH" != "beta" ]; then
+    echo "Error: releases must be cut from beta or master, not '$BRANCH'."
+    echo "  Land your work first:  git checkout beta && git merge $BRANCH"
     exit 1
 fi
+
+# Tag: plain on master, branch-suffixed on beta, so a beta release and a later master release of
+# the same VERSION do not collide on one immutable tag.
+case "$BRANCH" in
+    master) TAG="v${VERSION}" ;;
+    *)      TAG="v${VERSION}-${BRANCH}" ;;
+esac
 
 if [ ! -f "$RELEASE_FILE" ]; then
     echo "Error: $RELEASE_FILE not found"

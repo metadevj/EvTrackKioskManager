@@ -31,7 +31,12 @@ cd "$SCRIPT_DIR"
 
 VERSION=$(cat VERSION | tr -d '[:space:]')
 BRANCH=$(git branch --show-current)
-TAG="v${VERSION}"
+# Tag: plain on master, branch-suffixed on beta, so a beta release and a later master release of
+# the same VERSION do not collide on one immutable tag.
+case "$BRANCH" in
+    master) TAG="v${VERSION}" ;;
+    *)      TAG="v${VERSION}-${BRANCH}" ;;
+esac
 
 # APK naming convention (see header)
 APP_SLUG="evtrack-kiosk-manager"
