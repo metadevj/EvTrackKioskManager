@@ -5,6 +5,17 @@ This file is the source for GitHub release notes when publishing a release.
 
 ---
 
+## [1.3.1] - 2026-10-06
+
+### Changed
+- Release from beta as well as master, with a branch-suffixed tag
+- Docs: versionCode is now derived from the whole version
+- Bump to 1.3.1; derive versionCode from the whole version
+- WORKFLOW: feature -> dev -> beta -> master
+- Skills: dev -> beta -> master, not a rename of dev
+- Release skills in claude/, local context ignored
+- Settings screen: Manager update and Device Owner move off the main screen
+- Self-update the Manager from ARCS, by hand
 ## [1.2.5] - 2026-10-05
 
 ### Added
