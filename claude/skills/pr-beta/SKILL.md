@@ -1,24 +1,28 @@
 ---
 name: pr-beta
-description: Use when the user asks to land, PR, or merge the current feature branch into beta - "PR this to beta", "land this", "ship this to beta", "merge this into beta", "/pr-beta". Only ever runs FROM a feature branch; promoting beta to master is pr-main.
+description: Use when the user asks to land, PR, or merge the current work into beta - "PR this to beta", "land this", "ship this to beta", "merge dev into beta", "/pr-beta". Runs FROM dev or a feature branch, never from beta or master; promoting beta to master is pr-main.
 ---
 
 # PR to beta
 
 ## Purpose
 
-Land the current feature branch on `beta` through a PR: **sync the branch with the latest base
-first, re-gate locally, merge with a merge commit, verify it landed.**
+Land the current work - `dev`, or a feature branch - on `beta` through a PR: **sync the branch
+with the latest base first, re-gate locally, merge with a merge commit, verify it landed.**
 
 ## The branch model
 
-`feature -> beta -> master`, the same shape as EvTrackFrontDesk:
+`dev` (and `feature/*`) `-> beta -> master`:
 
 | Branch | Role |
 |---|---|
-| `feature/*` | where work happens |
+| `dev` | day-to-day work; the usual source for this skill |
+| `feature/*` | larger pieces of work, cut from `dev` |
 | `beta` | integration and bench testing - this skill's destination |
 | `master` | production; releases are cut here (`release.sh` refuses any other branch) |
+
+`feature -> dev` is an ordinary merge and needs no skill. This one is the gated step: `dev` or a
+feature branch into `beta`.
 
 The ARCS channel is a separate thing from the branch: every publish lands on the **beta** channel
 and a human promotes it to **stable** in ARCS admin.
@@ -31,18 +35,18 @@ fires on version tags. Every gate below is local and mandatory.
 ```bash
 BRANCH=$(git branch --show-current)
 case "$BRANCH" in
-  beta|master|main) echo "ABORT: pr-beta runs from a FEATURE branch, not $BRANCH"; exit 1 ;;
+  beta|master|main) echo "ABORT: pr-beta lands dev or a feature branch ON beta - you are on $BRANCH"; exit 1 ;;
   "")               echo "ABORT: detached HEAD"; exit 1 ;;
 esac
-echo "feature branch: $BRANCH"
+echo "source branch: $BRANCH"
 ```
 
-- **Current branch must NOT be `beta`, `master` (or `main`), and must not be detached.** This is
-  the first thing to check, before reading anything else about the change. On `beta` there is
-  nothing to land and a PR would be beta-into-beta; on `master` it would try to drag production
-  history backwards into the integration branch. If the user asks for pr-beta while standing on
-  either, say which branch they are on and stop - the thing they want is probably pr-main (promote)
-  or cut-release.
+- **Current branch must NOT be `beta`, `master` (or `main`), and must not be detached.** Check this
+  before reading anything else about the change. On `beta` there is nothing to land and the PR would
+  be beta-into-beta; on `master` it would drag production history backwards into the integration
+  branch. If the user asks for pr-beta while standing on either, say which branch they are on and
+  stop - what they want is probably pr-main (promote) or cut-release.
+- `dev` is a perfectly normal source here, and the usual one.
 - `gh auth status` shows a logged-in account.
 - You know which issues the branch fixes; they go in the PR body.
 
@@ -85,7 +89,7 @@ Why gate after the sync: the post-merge tree is new and has never been built by 
 ## Step 4 - Push and create the PR
 
 ```bash
-git push -u origin <feature-branch>
+git push -u origin "$BRANCH"
 gh pr create --base beta --title "<descriptive title>" --body "<body>"
 ```
 

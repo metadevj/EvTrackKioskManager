@@ -16,9 +16,9 @@ unchanged unless this file says otherwise:
 
 | Phase | Skill | What it does |
 |---|---|---|
-| 1 Land | pr-beta | sync beta into the branch, gate, PR, merge commit, verify |
+| 1 Land | pr-beta | from `dev`/`feature`: sync beta in, gate, PR, merge commit, verify |
 | 2 Promote | pr-main | show what promotes, gate the merged result, merge to master |
-| 3 Release | cut-release | bump, signed build from AWS keys, RELEASE.md, tag, GitHub release, ARCS publish, back-merge |
+| 3 Release | cut-release | bump, signed build from AWS keys, RELEASE.md, tag, GitHub release, ARCS publish, back-merge master -> beta -> dev |
 
 An optional argument (`build` | `minor` | `major`) is passed to cut-release's bump step.
 
@@ -26,8 +26,9 @@ An optional argument (`build` | `minor` | `major`) is passed to cut-release's bu
 
 Gather, without changing anything:
 
-- Current branch and working tree state. If dirty, draft the commit message NOW: it goes in this
-  summary, because there is no later pause to propose it in.
+- Current branch and working tree state - `dev` and feature branches are both valid starting
+  points. If dirty, draft the commit message NOW: it goes in this summary, because there is no later
+  pause to propose it in.
 - What would land: `git log origin/beta..HEAD --oneline` (or "nothing to land" when already on
   `beta`/`master`).
 - What would promote: `git log origin/master..origin/beta --oneline`.

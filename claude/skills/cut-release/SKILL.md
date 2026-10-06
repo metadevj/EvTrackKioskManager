@@ -149,9 +149,12 @@ resumes safely.
 
 ```bash
 git checkout beta && git merge master && git push origin beta
+git checkout dev  && git merge beta   && git push origin dev
 ```
 
-`RELEASE.md` and the bump are minted on `master`; without this, `beta` drifts behind every release.
+`RELEASE.md` and the bump are minted on `master`, so they have to flow back down the whole line.
+Stopping at `beta` leaves `dev` - where the next work starts - behind every release, and the next
+pr-beta then carries a VERSION conflict for no reason.
 
 ## Red Flags - STOP
 
@@ -174,4 +177,4 @@ git checkout beta && git merge master && git push origin beta
 | Push | `./push-release.sh` | branch+tag pushed, APK uploaded |
 | Verify | `gh release view --json url,assets` | release URL with the APK |
 | ARCS | publish-apks flow | S3 verified + registration succeeded |
-| Back-merge | `git checkout beta && git merge master` | beta carries RELEASE.md |
+| Back-merge | master -> beta -> dev | both carry RELEASE.md and the bump |
