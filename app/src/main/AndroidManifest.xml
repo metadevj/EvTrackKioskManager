@@ -59,6 +59,18 @@
           Device admin receiver. Required to hold Device Owner. Provision with:
             adb shell dpm set-device-owner com.evtrack.kioskmanager/.AdminReceiver
         -->
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false"
+            android:label="@string/settings"
+            android:parentActivityName=".MainActivity" />
+
+        <activity
+            android:name=".ManagerUpdateActivity"
+            android:exported="false"
+            android:label="Kiosk Manager update"
+            android:parentActivityName=".SettingsActivity" />
+
         <receiver
             android:name=".AdminReceiver"
             android:exported="true"

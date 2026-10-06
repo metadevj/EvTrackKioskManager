@@ -4,6 +4,7 @@
     <string name="install_channel_name">App install</string>
     <string name="install_notif_title">EvTrack Kiosk Manager</string>
     <string name="install_notif_text">Installing kiosk app update…</string>
+    <string name="settings">Settings</string>
     <string name="release_device_owner">Release Device Owner</string>
     <string name="release_device_owner_title">Release Device Owner?</string>
     <string name="release_device_owner_message">This kiosk stops being managed: lockdown is lifted and the Manager can then be uninstalled normally.\n\nIt cannot be undone from here. Making the device managed again needs the provisioning steps repeated.</string>

@@ -1,10 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fillViewport="true"
-    android:padding="16dp">
+    android:orientation="vertical">
+
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="?attr/colorSurface"
+        app:titleTextColor="?attr/colorOnSurface" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true"
+        android:padding="16dp">
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
@@ -34,22 +46,6 @@
                 android:paddingBottom="12dp" />
 
             <!-- Status rows -->
-            <TextView
-                android:id="@+id/txtDeviceOwner"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Device Owner: …"
-                android:textSize="16sp"
-                android:paddingBottom="4dp" />
-
-            <TextView
-                android:id="@+id/txtNotOwnerHint"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:textColor="#B00020"
-                android:textSize="13sp"
-                android:visibility="gone"
-                android:paddingBottom="8dp" />
 
             <TextView
                 android:id="@+id/txtInstalled"
@@ -91,31 +87,6 @@
                 android:textSize="16sp"
                 android:paddingBottom="12dp" />
 
-            <TextView
-                android:id="@+id/txtManagerInstalled"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Kiosk Manager (this app): …"
-                android:textSize="16sp"
-                android:paddingTop="8dp"
-                android:paddingBottom="4dp" />
-
-            <TextView
-                android:id="@+id/txtManagerMain"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Kiosk Manager — Main (ARCS): …"
-                android:textSize="16sp"
-                android:paddingBottom="4dp" />
-
-            <TextView
-                android:id="@+id/txtManagerBeta"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Kiosk Manager — Beta (ARCS): …"
-                android:textSize="16sp"
-                android:paddingBottom="12dp" />
-
             <!-- Actions -->
             <Button
                 android:id="@+id/btnCheck"
@@ -148,18 +119,6 @@
                 android:text="Install FrontDesk Eida — Beta" />
 
             <Button
-                android:id="@+id/btnManagerMain"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Update Manager — Main" />
-
-            <Button
-                android:id="@+id/btnManagerBeta"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Update Manager — Beta" />
-
-            <Button
                 android:id="@+id/btnRollback"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -169,11 +128,6 @@
               Maintenance only. Device Owner cannot be undone over adb, so without this a tablet
               can only be freed by a factory reset. Confirmed before it acts.
             -->
-            <Button
-                android:id="@+id/btnReleaseOwner"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/release_device_owner" />
 
             <ProgressBar
                 android:id="@+id/progressDownload"
@@ -204,3 +158,4 @@
         </LinearLayout>
     </androidx.constraintlayout.widget.ConstraintLayout>
 </ScrollView>
+</LinearLayout>

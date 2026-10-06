@@ -24,14 +24,15 @@ class PackageReplacedReceiver : BroadcastReceiver() {
 
         val enabled = LockdownState.isEnabled(context)
         Log.i(TAG, "Replaced with a new Manager build; lockdown enabled=$enabled")
-        val lockdown = LockdownManager(context)
         if (enabled) {
-            lockdown.applyAndLaunch()
+            // Re-pin: the install dropped the lock task, and an unpinned wall-mounted kiosk is just
+            // a tablet someone can poke at.
+            LockdownManager(context).applyAndLaunch()
         } else {
-            // Mirrors BootReceiver: clear rather than merely not grant, so a stale allowlist cannot
-            // silently re-pin a device that is no longer meant to be locked down.
-            lockdown.clearKioskLockdown()
-            lockdown.launchManagedApp()
+            // Deliberately nothing. Unlike boot, a replace happens while someone is USING the device -
+            // they pressed Update in the Manager. Launching the managed app here would throw them out
+            // of the screen they are standing in, and this device is not meant to be pinned anyway.
+            Log.i(TAG, "Lockdown not enabled - leaving the foreground alone")
         }
     }
 

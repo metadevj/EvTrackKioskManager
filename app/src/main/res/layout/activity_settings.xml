@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="?attr/colorSurface"
+        app:titleTextColor="?attr/colorOnSurface" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:paddingBottom="16dp" />
+
+        <TextView
+            android:id="@+id/txtSettingsManager"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Kiosk Manager: …"
+            android:textSize="16sp"
+            android:paddingBottom="4dp" />
+
+        <TextView
+            android:id="@+id/txtSettingsOwner"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Device Owner: …"
+            android:textSize="16sp"
+            android:paddingBottom="4dp" />
+
+        <TextView
+            android:id="@+id/txtSettingsOwnerHint"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="14sp"
+            android:visibility="gone"
+            android:paddingBottom="16dp" />
+
+        <TextView
+            android:id="@+id/txtSettingsManagerMain"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Kiosk Manager — Main (ARCS): …"
+            android:textSize="16sp"
+            android:paddingBottom="4dp" />
+
+        <TextView
+            android:id="@+id/txtSettingsManagerBeta"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Kiosk Manager — Beta (ARCS): …"
+            android:textSize="16sp"
+            android:paddingBottom="16dp" />
+
+        <Button
+            android:id="@+id/btnOpenManagerUpdate"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Kiosk Manager update…" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Check ARCS for a newer Manager and install it. Manual only — nothing updates on its own."
+            android:textSize="14sp"
+            android:paddingBottom="24dp" />
+
+        <Button
+            android:id="@+id/btnReleaseOwner"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/release_device_owner" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Stops this kiosk being managed. Cannot be undone from here."
+            android:textSize="14sp"
+            android:paddingBottom="16dp" />
+
+        <TextView
+            android:id="@+id/txtSettingsStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Ready."
+            android:textSize="16sp"
+            android:fontFamily="monospace"
+            android:paddingTop="8dp" />
+    </LinearLayout>
+</ScrollView>
+</LinearLayout>

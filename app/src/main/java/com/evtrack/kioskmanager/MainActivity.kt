@@ -14,10 +14,8 @@ import com.evtrack.kioskmanager.cdn.Flavour
 import com.evtrack.kioskmanager.lockdown.LockdownManager
 import com.evtrack.kioskmanager.cdn.arcs.ArcsCredentials
 import com.evtrack.kioskmanager.cdn.ReleaseMeta
-import com.evtrack.kioskmanager.update.SelfUpdater
 import com.evtrack.kioskmanager.update.UpdateManager
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -36,24 +34,13 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var updateManager: UpdateManager
 
-    private lateinit var txtDeviceOwner: TextView
-    private lateinit var txtNotOwnerHint: TextView
     private lateinit var txtInstalled: TextView
     private lateinit var txtStatus: TextView
 
     private lateinit var progressDownload: ProgressBar
     private lateinit var btnCheck: Button
     private lateinit var btnRollback: Button
-    private lateinit var btnReleaseOwner: Button
     private lateinit var btnCancel: Button
-    private lateinit var btnManagerMain: Button
-    private lateinit var btnManagerBeta: Button
-    private lateinit var txtManagerInstalled: TextView
-    private lateinit var txtManagerMain: TextView
-    private lateinit var txtManagerBeta: TextView
-
-    /** Self-update of this app. Manual only - there is no scheduled or boot-time check. */
-    private val selfUpdater by lazy { SelfUpdater(this) }
 
     /** One installable {flavour × channel} choice, bound to a version row + install button. */
     private data class InstallOption(
@@ -81,24 +68,17 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        setSupportActionBar(findViewById(R.id.toolbar))
 
         updateManager = UpdateManager(applicationContext)
 
-        txtDeviceOwner = findViewById(R.id.txtDeviceOwner)
-        txtNotOwnerHint = findViewById(R.id.txtNotOwnerHint)
         txtInstalled = findViewById(R.id.txtInstalled)
         txtStatus = findViewById(R.id.txtStatus)
 
         progressDownload = findViewById(R.id.progressDownload)
         btnCheck = findViewById(R.id.btnCheck)
         btnRollback = findViewById(R.id.btnRollback)
-        btnReleaseOwner = findViewById(R.id.btnReleaseOwner)
         btnCancel = findViewById(R.id.btnCancel)
-        btnManagerMain = findViewById(R.id.btnManagerMain)
-        btnManagerBeta = findViewById(R.id.btnManagerBeta)
-        txtManagerInstalled = findViewById(R.id.txtManagerInstalled)
-        txtManagerMain = findViewById(R.id.txtManagerMain)
-        txtManagerBeta = findViewById(R.id.txtManagerBeta)
 
         for (opt in options) {
             val btn = findViewById<Button>(opt.buttonViewId)
@@ -108,10 +88,7 @@ class MainActivity : AppCompatActivity() {
 
         btnCheck.setOnClickListener { onCheck() }
         btnRollback.setOnClickListener { onRollback() }
-        btnReleaseOwner.setOnClickListener { onReleaseDeviceOwner() }
         btnCancel.setOnClickListener { onCancel() }
-        btnManagerMain.setOnClickListener { onSelfUpdate(SelfUpdater.DEFAULT_CHANNEL) }
-        btnManagerBeta.setOnClickListener { onSelfUpdate("beta") }
 
         refreshStatus()
         autoCheckCdn()
@@ -138,6 +115,19 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onCreateOptionsMenu(menu: android.view.Menu): Boolean {
+        menuInflater.inflate(R.menu.main_menu, menu)
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: android.view.MenuItem): Boolean =
+        if (item.itemId == R.id.action_settings) {
+            startActivity(android.content.Intent(this, SettingsActivity::class.java))
+            true
+        } else {
+            super.onOptionsItemSelected(item)
+        }
+
     override fun onResume() {
         super.onResume()
         refreshStatus()
@@ -145,22 +135,10 @@ class MainActivity : AppCompatActivity() {
 
     /** Refresh the local (non-network) status rows. */
     private fun refreshStatus() {
-        val isOwner = isDeviceOwner()
-        txtDeviceOwner.text = "Device Owner: ${if (isOwner) "YES" else "NO"}"
-        if (isOwner) {
-            txtNotOwnerHint.visibility = TextView.GONE
-        } else {
-            txtNotOwnerHint.visibility = TextView.VISIBLE
-            txtNotOwnerHint.text =
-                "Not provisioned as Device Owner — silent install unavailable.\n" +
-                    "Run: adb shell dpm set-device-owner com.evtrack.kioskmanager/.AdminReceiver"
-        }
-
         val installed = updateManager.installedVersion()
         txtInstalled.text = "Installed (${updateManager.managedPackage}): " +
             (installed ?: "not installed")
 
-        txtManagerInstalled.text = "Kiosk Manager (this app): ${selfUpdater.installedVersion()}"
     }
 
     private fun isDeviceOwner(): Boolean {
@@ -178,123 +156,10 @@ class MainActivity : AppCompatActivity() {
         txtStatus.text = text
     }
 
-    /**
-     * Hand back Device Owner.
-     *
-     * The only other way out is a factory reset: adb cannot remove a non-test admin. That makes
-     * this destructive in one direction only, so it asks first, and says plainly what is lost.
-     */
-    private fun onReleaseDeviceOwner() {
-        val lockdown = LockdownManager(this)
-        if (!lockdown.isDeviceOwner()) {
-            setStatus(getString(R.string.release_device_owner_not_owner))
-            return
-        }
-
-        AlertDialog.Builder(this)
-            .setTitle(R.string.release_device_owner_title)
-            .setMessage(R.string.release_device_owner_message)
-            .setNegativeButton(android.R.string.cancel, null)
-            .setPositiveButton(R.string.release_device_owner_confirm) { _, _ ->
-                val released = lockdown.releaseDeviceOwner()
-                setStatus(
-                    getString(
-                        if (released) R.string.release_device_owner_done
-                        else R.string.release_device_owner_failed
-                    )
-                )
-                refreshStatus()
-            }
-            .show()
-    }
-
     /** Enable/disable action buttons and show/hide the progress bar for a running op. */
-    /** Fill in what ARCS publishes for the Manager itself, on both channels. */
-    private suspend fun refreshManagerChannels() {
-        txtManagerMain.text =
-            "Kiosk Manager - Main (ARCS): " + (selfUpdater.published(SelfUpdater.DEFAULT_CHANNEL) ?: "unavailable")
-        txtManagerBeta.text =
-            "Kiosk Manager - Beta (ARCS): " + (selfUpdater.published("beta") ?: "unavailable")
-    }
-
-    /**
-     * Update THIS app from ARCS, on [channel] ("latest" = Main, "beta").
-     *
-     * Asks first: the install replaces the running Manager and kills this process part-way through,
-     * so the screen will simply disappear. Nothing is scheduled - this only ever happens because
-     * someone pressed the button.
-     */
-    private fun onSelfUpdate(channel: String) {
-        if (!ArcsCredentials.isConfigured()) {
-            setStatus("No ARCS licence in this build - set arcs.licenseJwt in local.properties.")
-            return
-        }
-        setBusy(true)
-        setStatus("Checking for a Manager update on ${channelLabel(channel)}…")
-        currentJob = lifecycleScope.launch {
-            try {
-                val update = selfUpdater.check(channel)
-                if (update == null) {
-                    setStatus(
-                        "Manager is up to date on ${channelLabel(channel)} " +
-                            "(installed ${selfUpdater.installedVersion()})."
-                    )
-                    refreshManagerChannels()
-                    return@launch
-                }
-                val go = confirmSelfUpdate(update.version, channelLabel(channel))
-                if (!go) {
-                    setStatus("Manager update cancelled.")
-                    return@launch
-                }
-                setStatus("Downloading Manager ${update.version}…")
-                val result = selfUpdater.apply(update) { read, total ->
-                    if (total > 0) runOnUiThread {
-                        progressDownload.isIndeterminate = false
-                        progressDownload.max = 100
-                        progressDownload.progress = ((read * 100) / total).toInt()
-                    }
-                }
-                setStatus(result.message)
-                refreshStatus()
-            } catch (e: CancellationException) {
-                setStatus("Cancelled.")
-                throw e
-            } catch (e: Exception) {
-                setStatus("Manager update failed: ${e.message}")
-            } finally {
-                setBusy(false)
-            }
-        }
-    }
-
-    private fun channelLabel(channel: String): String =
-        if (channel.equals("beta", ignoreCase = true)) "Beta" else "Main"
-
-    /** Confirms a self-update, resuming the coroutine with the answer. */
-    private suspend fun confirmSelfUpdate(version: String, label: String): Boolean =
-        suspendCancellableCoroutine { cont ->
-            val dialog = AlertDialog.Builder(this)
-                .setTitle("Update the Kiosk Manager?")
-                .setMessage(
-                    "Replace this app (${selfUpdater.installedVersion()}) with $version from $label.\n\n" +
-                        "The Manager restarts as part of the install, so this screen will close. " +
-                        "Device Owner and the kiosk lockdown are restored automatically."
-                )
-                .setPositiveButton("Update") { _, _ -> if (cont.isActive) cont.resume(true) {} }
-                .setNegativeButton("Cancel") { _, _ -> if (cont.isActive) cont.resume(false) {} }
-                .setOnCancelListener { if (cont.isActive) cont.resume(false) {} }
-                .create()
-            cont.invokeOnCancellation { dialog.dismiss() }
-            dialog.show()
-        }
-
     private fun setBusy(busy: Boolean) {
         btnCheck.isEnabled = !busy
         btnRollback.isEnabled = !busy
-        btnReleaseOwner.isEnabled = !busy
-        btnManagerMain.isEnabled = !busy
-        btnManagerBeta.isEnabled = !busy
         for (b in optionButtons) b.isEnabled = !busy
         btnCancel.visibility = if (busy) View.VISIBLE else View.GONE
         if (busy) {
@@ -324,7 +189,6 @@ class MainActivity : AppCompatActivity() {
         currentJob = lifecycleScope.launch {
             try {
                 for (opt in options) setOptionVersion(opt, safeCheck(opt))
-                refreshManagerChannels()
                 setStatus("Check complete.")
             } catch (e: CancellationException) {
                 setStatus("Cancelled.")

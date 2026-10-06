@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="?attr/colorSurface"
+        app:titleTextColor="?attr/colorOnSurface" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Kiosk Manager update"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:paddingBottom="16dp" />
+
+        <TextView
+            android:id="@+id/txtManagerInstalled"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Installed: …"
+            android:textSize="16sp"
+            android:paddingBottom="4dp" />
+
+        <TextView
+            android:id="@+id/txtManagerMain"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Main (ARCS): …"
+            android:textSize="16sp"
+            android:paddingBottom="4dp" />
+
+        <TextView
+            android:id="@+id/txtManagerBeta"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Beta (ARCS): …"
+            android:textSize="16sp"
+            android:paddingBottom="16dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Updating replaces this app and restarts it, so this screen will close. Device Owner and the kiosk lockdown are restored automatically."
+            android:textSize="14sp"
+            android:paddingBottom="16dp" />
+
+        <Button
+            android:id="@+id/btnManagerCheck"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Check ARCS" />
+
+        <Button
+            android:id="@+id/btnManagerMain"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Update Manager — Main" />
+
+        <Button
+            android:id="@+id/btnManagerBeta"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Update Manager — Beta" />
+
+        <ProgressBar
+            android:id="@+id/progressManager"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:visibility="gone"
+            android:paddingTop="12dp" />
+
+        <TextView
+            android:id="@+id/txtManagerStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Ready."
+            android:textSize="16sp"
+            android:fontFamily="monospace"
+            android:paddingTop="16dp" />
+    </LinearLayout>
+</ScrollView>
+</LinearLayout>
