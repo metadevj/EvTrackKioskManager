@@ -81,6 +81,18 @@
             android:exported="false" />
 
         <!--
+          Fires after the Manager replaces ITSELF (manual self-update from ARCS). The install kills
+          our process, so the kiosk lockdown has to be re-applied here.
+        -->
+        <receiver
+            android:name=".ipc.PackageReplacedReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!--
           FrontDesk -> Manager install trigger. Exported so FrontDesk can reach it,
           but gated by our signature permission so ONLY same-signed apps can fire it.
         -->

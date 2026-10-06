@@ -91,6 +91,31 @@
                 android:textSize="16sp"
                 android:paddingBottom="12dp" />
 
+            <TextView
+                android:id="@+id/txtManagerInstalled"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Kiosk Manager (this app): …"
+                android:textSize="16sp"
+                android:paddingTop="8dp"
+                android:paddingBottom="4dp" />
+
+            <TextView
+                android:id="@+id/txtManagerMain"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Kiosk Manager — Main (ARCS): …"
+                android:textSize="16sp"
+                android:paddingBottom="4dp" />
+
+            <TextView
+                android:id="@+id/txtManagerBeta"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Kiosk Manager — Beta (ARCS): …"
+                android:textSize="16sp"
+                android:paddingBottom="12dp" />
+
             <!-- Actions -->
             <Button
                 android:id="@+id/btnCheck"
@@ -121,6 +146,18 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Install FrontDesk Eida — Beta" />
+
+            <Button
+                android:id="@+id/btnManagerMain"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Update Manager — Main" />
+
+            <Button
+                android:id="@+id/btnManagerBeta"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Update Manager — Beta" />
 
             <Button
                 android:id="@+id/btnRollback"

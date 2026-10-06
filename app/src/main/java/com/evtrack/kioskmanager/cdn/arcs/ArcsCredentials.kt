@@ -30,6 +30,12 @@ object ArcsCredentials {
      */
     const val PRODUCT: String = "evtrack-frontdesk"
 
+    /**
+     * Registry product for the Manager itself, used by self-update. Same licence, same proof, same
+     * endpoint - only the product name differs, and it must be allowlisted in ARCS like the other.
+     */
+    const val MANAGER_PRODUCT: String = "evtrack-kiosk-manager"
+
     /** True when a licence was supplied at build time. */
     fun isConfigured(): Boolean = licenseJwt.isNotBlank()
 }

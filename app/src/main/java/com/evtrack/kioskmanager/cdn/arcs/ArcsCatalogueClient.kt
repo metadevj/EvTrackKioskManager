@@ -52,8 +52,10 @@ class ArcsCatalogueClient(
     private val claims by lazy { LicenseClaims.parse(licenseJwt) }
     private val signer by lazy { ArcsProofSigner(claims.sid(), claims.spr()) }
 
-    @Volatile
-    private var cached: Pair<Long, Map<String, ArcsChannel>>? = null
+    // Keyed by product: self-update asks for evtrack-kiosk-manager while the UI asks for
+    // evtrack-frontdesk, and a single slot would have served whichever was fetched first to both
+    // for the whole cache window.
+    private val cached = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, Map<String, ArcsChannel>>>()
 
     /**
      * The latest released build per channel, keyed by lowercase channel name.
@@ -64,17 +66,17 @@ class ArcsCatalogueClient(
      */
     suspend fun channels(product: String = ArcsCredentials.PRODUCT): Map<String, ArcsChannel> =
         withContext(Dispatchers.IO) {
-            cached?.let { (at, value) ->
+            cached[product]?.let { (at, value) ->
                 if (System.currentTimeMillis() - at < CACHE_MILLIS) return@withContext value
             }
             val fetched = fetch(product)
-            cached = System.currentTimeMillis() to fetched
+            cached[product] = System.currentTimeMillis() to fetched
             fetched
         }
 
-    /** Drops the cached catalogue so the next call goes to ARCS. */
+    /** Drops cached catalogues so the next call goes to ARCS. */
     fun invalidate() {
-        cached = null
+        cached.clear()
     }
 
     private fun fetch(product: String): Map<String, ArcsChannel> {
