@@ -7,21 +7,52 @@ recovers the FrontDesk kiosk app and enforces kiosk lockdown.
 ## Branching
 
 ```
-dev  →  master
+feature/*  →  dev  →  beta  →  master
 ```
 
 | Branch | Purpose |
 |--------|---------|
-| `dev`    | Development and on-device testing — all work happens here |
-| `master` | Production — stable, **released** code |
+| `feature/*` | Larger pieces of work, cut from `dev` |
+| `dev`       | Day-to-day development and on-device testing |
+| `beta`      | Integration and bench testing — what gets released to the ARCS **beta** channel |
+| `master`    | Production — stable, **released** code |
 
-Develop on `dev`; when it's good, merge into `master` and release from `master`.
-There is one release type (a single signed universal APK) — no beta.
+Work on `dev` (or a feature branch off it). When it is good, land it on `beta`,
+bench-test the release, then promote `beta` to `master` and release from there.
+`release.sh` refuses to run on any branch but `master`.
+
+There is one release type: a single signed universal APK. "Beta" is **not** a
+separate build — it is the same release left on the ARCS beta channel rather
+than promoted to stable.
 
 ```bash
-# Release: promote dev to master
-git checkout master && git merge dev && git push origin master
+git checkout beta   && git merge dev  && git push origin beta     # land work for bench testing
+git checkout master && git merge beta && git push origin master   # promote for release
 ```
+
+After a release, the bump and `RELEASE.md` are minted on `master`, so merge back
+down the line or `beta` and `dev` fall behind every release:
+
+```bash
+git checkout beta && git merge master && git push origin beta
+git checkout dev  && git merge beta   && git push origin dev
+```
+
+### Claude Code skills
+
+The steps above are automated, with their gates and guards, in `claude/skills/`:
+
+| Skill | Runs from | Does |
+|-------|-----------|------|
+| `pr-beta` | `dev` or `feature/*` | sync `beta` in, gate, PR, merge, verify |
+| `pr-main` | `beta` only | show what promotes, gate, merge to `master` |
+| `cut-release` | `master` | bump, signed build, notes, tag, GitHub release, ARCS publish, back-merge |
+| `publish-apks` | — | APK from the GitHub release → `evtrack-releases` → register with ARCS |
+| `ship` | — | all three phases on one approval |
+
+`claude/` is the shared, reviewable copy and is committed. `/.claude/` is
+gitignored for local context; `.claude/skills` is a symlink to `claude/skills`
+so Claude Code still discovers them.
 
 ## Development
 
@@ -38,6 +69,12 @@ Commit convention: `feat:` / `fix:` / `chore:` / `docs:` / `refactor:` / `perf:`
 Single source of truth is the root **`VERSION`** file (`MAJOR.MINOR.BUILD`).
 `app/build.gradle` reads it: `versionName` = the full string, `versionCode` =
 the `BUILD` component (always increments, so it stays monotonic).
+
+> **Never hand-pick a version with a lower BUILD component.** `versionCode` is
+> that last number, so 1.3.1 after 1.2.5 is versionCode 1 after 5: Android
+> refuses the install as a downgrade, and the Manager's self-update would offer
+> it (1.3.1 > 1.2.5 numerically) and then fail. `bump-version.sh` always
+> increments BUILD for exactly this reason — minor from 1.2.5 gives 1.3.6.
 
 ```bash
 ./scripts/bump-version.sh          # increment build number (1.0.2 -> 1.0.3)
@@ -68,7 +105,7 @@ https://github.com/metadevj/EvTrackKioskManager/releases/latest/download/evtrack
 ## Releasing (from `master`)
 
 ```bash
-git checkout master && git merge dev   # 0. promote dev
+git checkout master && git merge beta  # 0. promote beta (which already carries dev)
 ./scripts/bump-version.sh              # 1. bump version
 git add VERSION && git commit -m "Bump version to $(cat VERSION)"
 ./build.sh --clean                     # 2. build the signed release APK
@@ -128,7 +165,12 @@ EVTRACK_RELEASES_AWS_PROFILE=evtrack-jan scripts/publish-release.sh --dry-run   
 ```
 
 A new release lands on **BETA**. Kiosks only self-update from **STABLE**, so nothing rolls out until
-an ARCS admin promotes the release (Admin > Releases). Full details, including the self-update
+an ARCS admin promotes the release (Admin > Releases). The branch a release was cut from does not
+decide the channel — every publish lands on beta, and promotion is a deliberate human step after
+the build has run on a bench kiosk.
+
+Self-update is **manual**: Settings (gear) → Kiosk Manager update → Main or Beta. There is no
+scheduled or boot-time check anywhere in the app. Full details, including the self-update
 contract: [docs/ARCS-RELEASES.md](docs/ARCS-RELEASES.md).
 
 ## Quick reference
