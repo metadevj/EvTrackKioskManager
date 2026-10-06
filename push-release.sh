@@ -44,9 +44,9 @@ APK_ASSET="${APP_SLUG}-universal-release.apk"
 GRADLE_APK="app/build/outputs/apk/release/app-release.apk"
 DIST_DIR="dist"
 
-# Releases are pushed from master only.
-if [ "$BRANCH" != "master" ]; then
-    echo "Error: releases are pushed from master only, not '$BRANCH'."
+# Releases are pushed from beta (ARCS beta channel) or master (production), matching release.sh.
+if [ "$BRANCH" != "master" ] && [ "$BRANCH" != "beta" ]; then
+    echo "Error: releases are pushed from beta or master, not '$BRANCH'."
     exit 1
 fi
 
