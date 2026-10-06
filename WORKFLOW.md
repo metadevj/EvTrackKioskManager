@@ -68,13 +68,22 @@ Commit convention: `feat:` / `fix:` / `chore:` / `docs:` / `refactor:` / `perf:`
 
 Single source of truth is the root **`VERSION`** file (`MAJOR.MINOR.BUILD`).
 `app/build.gradle` reads it: `versionName` = the full string, `versionCode` =
-the `BUILD` component (always increments, so it stays monotonic).
+`MAJOR*10000 + MINOR*100 + BUILD`, so the code rises with the version itself:
 
-> **Never hand-pick a version with a lower BUILD component.** `versionCode` is
-> that last number, so 1.3.1 after 1.2.5 is versionCode 1 after 5: Android
-> refuses the install as a downgrade, and the Manager's self-update would offer
-> it (1.3.1 > 1.2.5 numerically) and then fail. `bump-version.sh` always
-> increments BUILD for exactly this reason — minor from 1.2.5 gives 1.3.6.
+| VERSION | versionCode |
+|---------|-------------|
+| 1.2.5   | 10205 |
+| 1.3.1   | 10301 |
+| 2.0.0   | 20000 |
+
+Keep **MINOR and BUILD each below 100**, or the arithmetic collides (1.2.100
+and 1.3.0 would both be 10300). Any version you pick must be numerically
+greater than the last released one — Android refuses a lower `versionCode` as
+a downgrade, and the Manager's self-update is upgrade-only.
+
+> Before 1.3.1 the code was the BUILD component alone, so it only stayed
+> monotonic while that one number never went down (1.2.5 was code 5). Codes
+> under the new scheme start at 10301, well clear of every old one.
 
 ```bash
 ./scripts/bump-version.sh          # increment build number (1.0.2 -> 1.0.3)

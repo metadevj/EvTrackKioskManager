@@ -15,18 +15,23 @@ The flow wraps the repo's own scripts (`scripts/bump-version.sh`, `./build.sh`, 
 `./push-release.sh`, `scripts/publish-release.sh`) and answers their prompts, so their checks still
 run.
 
-## The versionCode trap - read before choosing a version
+## Choosing the version
 
-`app/build.gradle` derives `versionCode` from the **last component** of VERSION
-(`versionName.tokenize('.').last()`). 1.2.5 is versionCode 5.
+`versionCode` is derived from the WHOLE version in `app/build.gradle`:
+`MAJOR*10000 + MINOR*100 + BUILD` (1.2.5 -> 10205, 1.3.1 -> 10301, 2.0.0 -> 20000).
 
-So a "tidy" version like 1.3.1 after 1.2.5 is versionCode **1**: Android refuses the install as a
-downgrade, and the Manager's own self-updater would offer it (1.3.1 > 1.2.5 numerically) and then
-fail. `bump-version.sh` exists to prevent this - it always increments the build component, so minor
-from 1.2.5 gives **1.3.6**, not 1.3.1.
+Rules:
 
-Never hand-edit VERSION to a lower last component. If the user asks for one, say what it would do
-and offer the next legal number.
+- The new version must be numerically greater than the last released one. Android refuses a lower
+  `versionCode` as a downgrade, and the Manager's self-update is upgrade-only - it would offer a
+  version it cannot install.
+- Keep MINOR and BUILD each below 100, or the arithmetic collides (1.2.100 and 1.3.0 both give
+  10300).
+- `bump-version.sh` always increments BUILD, which is always safe. A hand-picked version is fine
+  under this scheme as long as it goes up - 1.3.1 after 1.2.5 is legal (10301 > 10205).
+
+Before 1.3.1 the code was the BUILD component alone, so codes ran 2, 4, 5. Everything under the new
+scheme starts at 10301 and stays clear of them.
 
 ## Signing comes from AWS, nowhere else
 
