@@ -9,7 +9,17 @@ plugins {
 // which always increments on a bump, so it stays monotonic across releases.
 def versionFile = rootProject.file('VERSION')
 def evtrackVersionName = versionFile.exists() ? versionFile.text.trim() : '1.0.0'
-def evtrackVersionCode = evtrackVersionName.tokenize('.').last().toInteger()
+// versionCode from the WHOLE version, not just the last component: MAJOR*10000 + MINOR*100 + BUILD.
+// Taking only the last component made the code non-monotonic the moment a version reused a lower
+// build number (1.3.1 after 1.2.5 would have been code 1 after code 5 - an install Android refuses
+// as a downgrade, which the Manager's own upgrade-only self-update would offer and then fail on).
+// This scheme rises with the version itself: 1.2.5 -> 10205, 1.3.1 -> 10301, 2.0.0 -> 20000.
+// It is also comfortably above every code shipped under the old scheme (max 5), so it stays
+// monotonic across the change. MINOR and BUILD must each stay below 100.
+def evtrackVersionParts = evtrackVersionName.tokenize('.').collect { it.toInteger() }
+def evtrackVersionCode = evtrackVersionParts[0] * 10000 +
+        (evtrackVersionParts.size() > 1 ? evtrackVersionParts[1] : 0) * 100 +
+        (evtrackVersionParts.size() > 2 ? evtrackVersionParts[2] : 0)
 
 // ── ARCS credential ─────────────────────────────────────────────────────────
 // The fleet licence authenticates the Manager to the ARCS downloads endpoint. Put it in
